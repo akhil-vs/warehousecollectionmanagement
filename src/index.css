@@ -1,0 +1,65 @@
+@import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+
+:root {
+  --ink: #1c1914;
+  --muted: #6a645a;
+  --line: rgba(28, 25, 20, 0.1);
+  --line-strong: rgba(28, 25, 20, 0.22);
+  --accent: #e0a045;
+  --accent-hot: #f0b45a;
+  --accent-ink: #8a5a12;
+  --font-display: 'Archivo Black', 'Arial Black', sans-serif;
+  --font-body: 'Source Sans 3', 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  font-family: var(--font-body);
+  line-height: 1.4;
+  font-weight: 400;
+  color: var(--ink);
+  background-color: #d8d2c6;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.25), transparent 18rem),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 47px,
+      rgba(28, 25, 20, 0.03) 47px,
+      rgba(28, 25, 20, 0.03) 48px
+    ),
+    radial-gradient(ellipse at 70% -10%, rgba(224, 160, 69, 0.22), transparent 42%),
+    linear-gradient(165deg, #e7e1d4 0%, #d2d8dc 48%, #c9d0c8 100%);
+  background-attachment: fixed;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
