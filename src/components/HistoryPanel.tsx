@@ -9,6 +9,12 @@ interface Props {
   events: AppEvent[];
 }
 
+interface OrderActivityGroup {
+  orderId: string;
+  events: AppEvent[];
+  latestAt: number;
+}
+
 export function HistoryPanel({ role, orders, events }: Props) {
   const [q, setQ] = useState('');
   const [status, setStatus] = useState<'all' | OrderStatus>('all');
@@ -40,6 +46,41 @@ export function HistoryPanel({ role, orders, events }: Props) {
     }
     return events;
   }, [events, role]);
+
+  const activityByOrder = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    const scopedOrderIds = new Set(scopedOrders.map((o) => o.id));
+    const byOrder = new Map<string, AppEvent[]>();
+
+    for (const e of scopedEvents) {
+      const list = byOrder.get(e.orderId) || [];
+      list.push(e);
+      byOrder.set(e.orderId, list);
+    }
+
+    const groups: OrderActivityGroup[] = [];
+    for (const [orderId, list] of byOrder) {
+      const inScopedOrders = scopedOrderIds.has(orderId);
+      if (status !== 'all' && !inScopedOrders) continue;
+      if (term) {
+        const matches =
+          inScopedOrders ||
+          orderId.toLowerCase().includes(term) ||
+          list.some((e) => e.operator.toLowerCase().includes(term));
+        if (!matches) continue;
+      }
+
+      const sorted = [...list].sort((a, b) => b.at - a.at);
+      groups.push({
+        orderId,
+        events: sorted,
+        latestAt: sorted[0]?.at ?? 0,
+      });
+    }
+
+    groups.sort((a, b) => b.latestAt - a.latestAt);
+    return groups;
+  }, [scopedEvents, scopedOrders, q, status]);
 
   return (
     <section className="panel">
@@ -118,20 +159,32 @@ export function HistoryPanel({ role, orders, events }: Props) {
 
       <div className="list-block">
         <h3>Activity log</h3>
-        {scopedEvents.length === 0 && <p className="empty">No activity yet.</p>}
-        <ul className="event-list">
-          {scopedEvents.slice(0, 100).map((e) => (
-            <li key={e.id}>
-              <span className="mono">{e.orderId}</span>
-              <span className="event-type">{e.type.replace(/_/g, ' ')}</span>
-              <span>
-                {e.operator}
-                {e.department ? ` · ${e.department}` : ''}
-              </span>
-              <span className="muted">{formatTime(e.at)}</span>
-            </li>
+        {activityByOrder.length === 0 && <p className="empty">No activity yet.</p>}
+        <div className="activity-accordion">
+          {activityByOrder.map((group) => (
+            <details key={group.orderId} className="activity-accordion-item">
+              <summary>
+                <span className="mono">{group.orderId}</span>
+                <span className="muted">
+                  {group.events.length} event{group.events.length === 1 ? '' : 's'}
+                </span>
+                <span className="muted activity-accordion-latest">{formatTime(group.latestAt)}</span>
+              </summary>
+              <ul className="event-list nested">
+                {group.events.map((e) => (
+                  <li key={e.id}>
+                    <span className="event-type">{e.type.replace(/_/g, ' ')}</span>
+                    <span>
+                      {e.operator}
+                      {e.department ? ` · ${e.department}` : ''}
+                    </span>
+                    <span className="muted">{formatTime(e.at)}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
           ))}
-        </ul>
+        </div>
       </div>
     </section>
   );
