@@ -412,9 +412,64 @@
   font-size: 0.92rem;
 }
 
+.event-list.nested li {
+  grid-template-columns: 9rem 1fr auto;
+}
+
 .event-type {
   text-transform: capitalize;
   font-weight: 600;
+}
+
+.activity-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.activity-accordion-item {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+}
+
+.activity-accordion-item summary {
+  display: grid;
+  grid-template-columns: 0.75rem minmax(6rem, auto) 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.75rem 0.9rem;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 600;
+}
+
+.activity-accordion-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.activity-accordion-item summary::before {
+  content: '';
+  width: 0.45rem;
+  height: 0.45rem;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+}
+
+.activity-accordion-item[open] summary::before {
+  transform: rotate(45deg);
+}
+
+.activity-accordion-latest {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.activity-accordion-item .event-list {
+  padding: 0 0.9rem 0.65rem;
+  border-top: 1px solid var(--line);
 }
 
 .overview-grid {
@@ -563,5 +618,22 @@
 
   .event-list li {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .event-list.nested li {
+    grid-template-columns: 1fr auto;
+  }
+
+  .activity-accordion-item summary {
+    grid-template-columns: 0.75rem 1fr;
+    grid-template-rows: auto auto;
+  }
+
+  .activity-accordion-item summary .mono {
+    grid-column: 2;
+  }
+
+  .activity-accordion-latest {
+    grid-column: 2;
   }
 }
