@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { FormEvent, KeyboardEvent } from 'react';
 import type { Department, DeviceRole, Order } from '../types';
 import { DEPARTMENTS } from '../types';
 import { formatDwell, formatTime, isStaleWait, statusLabel } from '../lib/format';
@@ -16,7 +16,7 @@ interface Props {
   onClearPrefill: () => void;
   markReady: (input: {
     orderId: string;
-    pallets: number;
+    pallets?: number;
     bay?: string;
     department: Department;
     operator: string;
@@ -40,8 +40,10 @@ export function PalletReadyPanel({
 }: Props) {
   const now = useNow();
   const deptDefault: Department = isDepartmentRole(role) ? role : 'B2B';
+  const orderIdRef = useRef<HTMLInputElement>(null);
+  const busyRef = useRef(false);
   const [orderId, setOrderId] = useState('');
-  const [pallets, setPallets] = useState('1');
+  const [pallets, setPallets] = useState('');
   const [bay, setBay] = useState('');
   const [department, setDepartment] = useState<Department>(deptDefault);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +53,7 @@ export function PalletReadyPanel({
     if (prefillOrderId) {
       setOrderId(prefillOrderId);
       onClearPrefill();
+      orderIdRef.current?.focus();
     }
   }, [prefillOrderId, onClearPrefill]);
 
@@ -73,54 +76,99 @@ export function PalletReadyPanel({
   const canAck = isDepartmentRole(role) || role === 'admin';
   const canHandover = isDepartmentRole(role);
 
-  async function submit(e: FormEvent) {
-    e.preventDefault();
+  function parsedPallets(): number | undefined {
+    const raw = pallets.trim();
+    if (!raw) return undefined;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 1) return undefined;
+    return Math.floor(n);
+  }
+
+  function clearFields() {
+    setOrderId('');
+    setPallets('');
+    setBay('');
+    setError(null);
+    orderIdRef.current?.focus();
+  }
+
+  async function save(overrideOrderId?: string) {
+    if (busyRef.current) return;
+    const id = (overrideOrderId ?? orderIdRef.current?.value ?? orderId)
+      .replace(/[\r\n]+/g, '')
+      .trim()
+      .toUpperCase();
+    if (!id) {
+      setError('Enter an order ID.');
+      return;
+    }
+    busyRef.current = true;
     setBusy(true);
     setError(null);
     const result = await markReady({
-      orderId,
-      pallets: Number(pallets),
+      orderId: id,
+      pallets: parsedPallets(),
       bay: bay || undefined,
       department: role === 'admin' ? department : deptDefault,
       operator,
     });
+    busyRef.current = false;
     setBusy(false);
     if (!result.ok) {
       setError(result.error);
       return;
     }
-    setOrderId('');
-    setPallets('1');
-    setBay('');
+    clearFields();
     onMarkedReady();
+  }
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    void save();
+  }
+
+  function onOrderIdKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    void save();
+  }
+
+  function onOrderIdChange(value: string) {
+    const scannedSubmit = /[\r\n]/.test(value);
+    const next = value.toUpperCase().replace(/[\r\n]+/g, '');
+    setOrderId(next);
+    if (scannedSubmit && next.trim()) void save(next);
   }
 
   return (
     <section className="panel">
       <div className="panel-head">
         <h2>Pallet ready</h2>
-        <p>Mark an order ready for dock collection.</p>
+        <p>Scan or type an order ID to mark it ready. Pallet count is optional and defaults to 1.</p>
       </div>
 
-      <form className="ready-form" onSubmit={(e) => void submit(e)}>
+      <form className="ready-form" onSubmit={submit} noValidate>
         <label className="field">
           <span>Order ID</span>
           <input
+            ref={orderIdRef}
             className="mono"
             value={orderId}
-            onChange={(e) => setOrderId(e.target.value.toUpperCase())}
+            onChange={(e) => onOrderIdChange(e.target.value)}
+            onKeyDown={onOrderIdKeyDown}
             required
             autoComplete="off"
+            autoFocus
+            placeholder="Scan or type"
           />
         </label>
         <label className="field">
-          <span>Pallets</span>
+          <span>Pallets (optional)</span>
           <input
             type="number"
             min={1}
             value={pallets}
             onChange={(e) => setPallets(e.target.value)}
-            required
           />
         </label>
         <label className="field">
