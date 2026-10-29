@@ -190,6 +190,27 @@
   color: var(--ink);
 }
 
+.ready-edit-form {
+  flex: 1 1 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.65rem;
+  align-items: end;
+}
+
+.ready-edit-form .row-actions {
+  grid-column: 1 / -1;
+}
+
+.ready-edit-form .form-error {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.order-list li.editing {
+  align-items: flex-start;
+}
+
 .ready-form,
 .history-filters,
 .dock-meta {

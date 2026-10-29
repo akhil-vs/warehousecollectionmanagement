@@ -17,6 +17,7 @@ import {
   exceptionHandover,
   markOrderReady,
   reopenOrder,
+  updateReadyOrder,
   resendLookup,
   respondToLookup,
   sendLookup,
@@ -229,6 +230,7 @@ export default function App() {
       orderId: string;
       pallets?: number;
       bay?: string;
+      collectionDate?: string;
       department: import('./types').Department;
       operator: string;
     }) => {
@@ -244,6 +246,21 @@ export default function App() {
       return result;
     },
     [data.openLookups, requireOperator],
+  );
+
+  const handleUpdateReady = useCallback(
+    async (
+      order: Order,
+      patch: { pallets: number; bay?: string; collectionDate?: string },
+    ) => {
+      if (!requireOperator()) {
+        return { ok: false as const, error: 'Confirm your name for this shift first.' };
+      }
+      const result = await updateReadyOrder(order, device.operator, patch);
+      if (result.ok) setToast(`Updated ${order.id}`);
+      return result;
+    },
+    [device.operator, requireOperator],
   );
 
   const handleExceptionById = useCallback(
@@ -418,6 +435,7 @@ export default function App() {
             onClearPrefill={() => setPrefillOrderId(undefined)}
             onMarkedReady={() => setToast('Order marked ready')}
             markReady={handleMarkReady}
+            updateReady={handleUpdateReady}
             onAcknowledge={(order) => {
               if (!requireOperator()) return;
               void acknowledgeOrder(order, device.operator).then((r) => {

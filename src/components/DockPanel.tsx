@@ -2,7 +2,14 @@ import { useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { Lookup, Order } from '../types';
 import { DEPARTMENTS } from '../types';
-import { formatDwell, formatTime, isStaleWait, statusLabel } from '../lib/format';
+import {
+  collectionDateLabel,
+  formatDwell,
+  formatTime,
+  isCollectionOverdue,
+  isStaleWait,
+  statusLabel,
+} from '../lib/format';
 import { lookupClaimedBy } from '../lib/orderState';
 import { useNow } from '../hooks/useNow';
 
@@ -47,6 +54,7 @@ export function DockPanel({
         o.id.toLowerCase().includes(term) ||
         o.department.toLowerCase().includes(term) ||
         (o.bay || '').toLowerCase().includes(term) ||
+        (o.collectionDate || '').includes(term) ||
         o.readyBy.toLowerCase().includes(term),
     );
   }, [readyOrders, q]);
@@ -165,26 +173,32 @@ export function DockPanel({
         <h3>Ready for collection</h3>
         {filtered.length === 0 && !noReadyMatch && <p className="empty">No ready pallets.</p>}
         <ul className="order-list">
-          {filtered.map((order) => (
-            <li key={order.id} className={isStaleWait(order.readyAt, now) ? 'stale' : undefined}>
-              <div className="order-main">
-                <span className="mono order-id">{order.id}</span>
-                <span className="status-pill ready">{statusLabel(order.status)}</span>
-                <span>
-                  {order.pallets} plt{order.bay ? ` · Bay ${order.bay}` : ''} · {order.department}
-                </span>
-                <span className="muted">
-                  Ready by {order.readyBy} · {formatTime(order.readyAt)} · ready{' '}
-                  {formatDwell(order.readyAt, now)}
-                </span>
-              </div>
-              <div className="order-actions">
-                <button type="button" className="btn primary" onClick={() => collect(order)}>
-                  Driver collection
-                </button>
-              </div>
-            </li>
-          ))}
+          {filtered.map((order) => {
+            const collectLabel = collectionDateLabel(order.collectionDate, now);
+            const stale =
+              isStaleWait(order.readyAt, now) || isCollectionOverdue(order.collectionDate, now);
+            return (
+              <li key={order.id} className={stale ? 'stale' : undefined}>
+                <div className="order-main">
+                  <span className="mono order-id">{order.id}</span>
+                  <span className="status-pill ready">{statusLabel(order.status)}</span>
+                  <span>
+                    {order.pallets} plt{order.bay ? ` · Bay ${order.bay}` : ''} · {order.department}
+                    {collectLabel ? ` · ${collectLabel}` : ''}
+                  </span>
+                  <span className="muted">
+                    Ready by {order.readyBy} · {formatTime(order.readyAt)} · ready{' '}
+                    {formatDwell(order.readyAt, now)}
+                  </span>
+                </div>
+                <div className="order-actions">
+                  <button type="button" className="btn primary" onClick={() => collect(order)}>
+                    Driver collection
+                  </button>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       </div>
 

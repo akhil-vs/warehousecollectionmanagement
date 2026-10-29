@@ -47,6 +47,10 @@ export function canCancelReady(order: Order): boolean {
   return order.status === 'ready';
 }
 
+export function canEditReady(order: Order): boolean {
+  return order.status === 'ready';
+}
+
 export function isLiveStatus(status: Order['status']): boolean {
   return status === 'ready' || status === 'arrived';
 }
