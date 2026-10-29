@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { DeviceRole } from '../types';
 
 interface Props {
@@ -8,7 +9,10 @@ interface Props {
   onEnableAlerts: () => void;
   soundBlocked: boolean;
   onUnlockSound: () => void;
-  onReassign: () => void;
+  hideReassign?: boolean;
+  reassignBusy?: boolean;
+  reassignError?: string | null;
+  onReassign: (pin: string) => Promise<boolean>;
 }
 
 export function AppHeader({
@@ -19,8 +23,13 @@ export function AppHeader({
   onEnableAlerts,
   soundBlocked,
   onUnlockSound,
+  hideReassign,
+  reassignBusy,
+  reassignError,
   onReassign,
 }: Props) {
+  const [reassignOpen, setReassignOpen] = useState(false);
+  const [pin, setPin] = useState('');
   const roleLabel =
     role === 'admin' ? 'Admin' : role === 'dock' ? 'Dock / Gate' : `Dept · ${role}`;
 
@@ -50,10 +59,51 @@ export function AppHeader({
             Tap to enable sound
           </button>
         )}
-        <button type="button" className="btn ghost subtle" onClick={onReassign}>
-          Reassign device
-        </button>
+        {!hideReassign && !reassignOpen && (
+          <button type="button" className="btn ghost subtle" onClick={() => setReassignOpen(true)}>
+            Reassign device
+          </button>
+        )}
+        {!hideReassign && reassignOpen && (
+          <form
+            className="reassign-row"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void onReassign(pin).then((ok) => {
+                if (ok) {
+                  setPin('');
+                  setReassignOpen(false);
+                }
+              });
+            }}
+          >
+            <label className="operator-field">
+              <span>Admin PIN</span>
+              <input
+                type="password"
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+                autoComplete="off"
+                placeholder="PIN to reassign"
+              />
+            </label>
+            <button type="submit" className="btn ghost" disabled={reassignBusy || !pin.trim()}>
+              Confirm
+            </button>
+            <button
+              type="button"
+              className="btn ghost subtle"
+              onClick={() => {
+                setReassignOpen(false);
+                setPin('');
+              }}
+            >
+              Cancel
+            </button>
+          </form>
+        )}
       </div>
+      {reassignError && <p className="form-error header-error">{reassignError}</p>}
     </header>
   );
 }

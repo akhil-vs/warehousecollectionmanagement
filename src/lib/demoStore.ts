@@ -10,6 +10,7 @@ import type {
   Order,
   OrderStatus,
   EventType,
+  LookupResponse,
 } from '../types';
 
 type Listener = () => void;
@@ -55,6 +56,7 @@ function addEvent(
   orderId: string,
   operator: string,
   department?: Department | string,
+  note?: string,
 ): void {
   events = [
     {
@@ -64,6 +66,7 @@ function addEvent(
       operator,
       department,
       at: Date.now(),
+      note,
     },
     ...events,
   ];
@@ -84,8 +87,9 @@ export function demoLogEvent(
   orderId: string,
   operator: string,
   department?: Department | string,
+  note?: string,
 ): void {
-  addEvent(type, orderId, operator, department);
+  addEvent(type, orderId, operator, department, note);
   emit();
 }
 
@@ -93,6 +97,7 @@ export function demoAddLookup(lookup: Omit<Lookup, 'id'>): Lookup {
   const full: Lookup = {
     ...lookup,
     id: `lk_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    responses: lookup.responses ?? {},
   };
   lookups = [full, ...lookups];
   emit();
@@ -101,7 +106,7 @@ export function demoAddLookup(lookup: Omit<Lookup, 'id'>): Lookup {
 
 export function demoUpdateLookup(
   id: string,
-  patch: Partial<Pick<Lookup, 'status' | 'at' | 'sentBy'>>,
+  patch: Partial<Pick<Lookup, 'status' | 'at' | 'sentBy' | 'responses'>>,
 ): void {
   lookups = lookups.map((l) => (l.id === id ? { ...l, ...patch } : l));
   emit();
@@ -117,4 +122,4 @@ export function demoCloseLookupsForOrder(
   emit();
 }
 
-export type { OrderStatus };
+export type { OrderStatus, LookupResponse };

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { AppEvent, DeviceRole, Order, OrderStatus } from '../types';
-import { formatTime, statusLabel } from '../lib/format';
+import { eventLabel, formatTime, statusLabel } from '../lib/format';
 import { isDepartmentRole } from '../hooks/useDeviceRole';
 
 interface Props {
@@ -21,7 +21,9 @@ export function HistoryPanel({ role, orders, events }: Props) {
 
   const scopedOrders = useMemo(() => {
     let list = [...orders].sort(
-      (a, b) => (b.collectedAt || b.arrivedAt || b.readyAt) - (a.collectedAt || a.arrivedAt || a.readyAt),
+      (a, b) =>
+        (b.collectedAt || b.cancelledAt || b.arrivedAt || b.readyAt) -
+        (a.collectedAt || a.cancelledAt || a.arrivedAt || a.readyAt),
     );
     if (isDepartmentRole(role)) {
       list = list.filter((o) => o.department === role);
@@ -34,7 +36,8 @@ export function HistoryPanel({ role, orders, events }: Props) {
           o.id.toLowerCase().includes(term) ||
           o.department.toLowerCase().includes(term) ||
           o.readyBy.toLowerCase().includes(term) ||
-          (o.collectedBy || '').toLowerCase().includes(term),
+          (o.collectedBy || '').toLowerCase().includes(term) ||
+          (o.cancelledBy || '').toLowerCase().includes(term),
       );
     }
     return list;
@@ -42,7 +45,7 @@ export function HistoryPanel({ role, orders, events }: Props) {
 
   const scopedEvents = useMemo(() => {
     if (isDepartmentRole(role)) {
-      return events.filter((e) => e.department === role || !e.department);
+      return events.filter((e) => e.department === role);
     }
     return events;
   }, [events, role]);
@@ -101,6 +104,7 @@ export function HistoryPanel({ role, orders, events }: Props) {
             <option value="ready">Ready</option>
             <option value="arrived">Driver waiting</option>
             <option value="collected">Collected</option>
+            <option value="cancelled">Cancelled</option>
           </select>
         </label>
       </div>
@@ -139,12 +143,23 @@ export function HistoryPanel({ role, orders, events }: Props) {
                     {o.arrivedBy && (
                       <>
                         Arrived {o.arrivedBy} · {formatTime(o.arrivedAt)}
+                        {o.door ? ` · Door ${o.door}` : ''}
+                        <br />
+                      </>
+                    )}
+                    {o.exceptionReason && (
+                      <>
+                        Exception: {o.exceptionReason}
                         <br />
                       </>
                     )}
                     {o.collectedBy ? (
                       <>
                         Collected {o.collectedBy} · {formatTime(o.collectedAt)}
+                      </>
+                    ) : o.cancelledBy ? (
+                      <>
+                        Cancelled {o.cancelledBy} · {formatTime(o.cancelledAt)}
                       </>
                     ) : (
                       <span className="muted">—</span>
@@ -173,10 +188,11 @@ export function HistoryPanel({ role, orders, events }: Props) {
               <ul className="event-list nested">
                 {group.events.map((e) => (
                   <li key={e.id}>
-                    <span className="event-type">{e.type.replace(/_/g, ' ')}</span>
+                    <span className="event-type">{eventLabel(e.type)}</span>
                     <span>
                       {e.operator}
                       {e.department ? ` · ${e.department}` : ''}
+                      {e.note ? ` · ${e.note}` : ''}
                     </span>
                     <span className="muted">{formatTime(e.at)}</span>
                   </li>

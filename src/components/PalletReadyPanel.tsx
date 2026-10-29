@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { Department, DeviceRole, Order } from '../types';
 import { DEPARTMENTS } from '../types';
-import { formatTime, statusLabel } from '../lib/format';
+import { formatDwell, formatTime, isStaleWait, statusLabel } from '../lib/format';
 import { isDepartmentRole } from '../hooks/useDeviceRole';
+import { useNow } from '../hooks/useNow';
+import { canAcknowledge, canCancelReady, canConfirmHandover } from '../lib/orderState';
 
 interface Props {
   role: DeviceRole;
@@ -21,7 +23,7 @@ interface Props {
   }) => Promise<{ ok: true } | { ok: false; error: string }>;
   onAcknowledge: (order: Order) => void;
   onConfirmHandover: (order: Order) => void;
-  onRemove: (order: Order) => void;
+  onCancel: (order: Order) => void;
 }
 
 export function PalletReadyPanel({
@@ -34,8 +36,9 @@ export function PalletReadyPanel({
   markReady,
   onAcknowledge,
   onConfirmHandover,
-  onRemove,
+  onCancel,
 }: Props) {
+  const now = useNow();
   const deptDefault: Department = isDepartmentRole(role) ? role : 'B2B';
   const [orderId, setOrderId] = useState('');
   const [pallets, setPallets] = useState('1');
@@ -55,9 +58,17 @@ export function PalletReadyPanel({
     if (isDepartmentRole(role)) setDepartment(role);
   }, [role]);
 
-  const visible = isDepartmentRole(role)
-    ? orders.filter((o) => o.department === role && o.status !== 'collected')
-    : orders.filter((o) => o.status !== 'collected');
+  const visible = useMemo(() => {
+    const live = isDepartmentRole(role)
+      ? orders.filter((o) => o.department === role && (o.status === 'ready' || o.status === 'arrived'))
+      : orders.filter((o) => o.status === 'ready' || o.status === 'arrived');
+    return [...live].sort((a, b) => {
+      if (a.status !== b.status) return a.status === 'arrived' ? -1 : 1;
+      const aTs = a.status === 'arrived' ? (a.arrivedAt ?? 0) : a.readyAt;
+      const bTs = b.status === 'arrived' ? (b.arrivedAt ?? 0) : b.readyAt;
+      return bTs - aTs;
+    });
+  }, [orders, role]);
 
   const canAck = isDepartmentRole(role) || role === 'admin';
   const canHandover = isDepartmentRole(role);
@@ -141,41 +152,54 @@ export function PalletReadyPanel({
         <h3>Ready &amp; waiting</h3>
         {visible.length === 0 && <p className="empty">No active orders.</p>}
         <ul className="order-list">
-          {visible.map((order) => (
-            <li key={order.id} className={order.status === 'arrived' ? 'arrived' : ''}>
-              <div className="order-main">
-                <span className="mono order-id">{order.id}</span>
-                <span className={`status-pill ${order.status}`}>{statusLabel(order.status)}</span>
-                <span>
-                  {order.pallets} plt{order.bay ? ` · Bay ${order.bay}` : ''} · {order.department}
-                </span>
-                <span className="muted">
-                  Ready by {order.readyBy} · {formatTime(order.readyAt)}
-                </span>
-              </div>
-              <div className="order-actions">
-                {canAck && order.status === 'arrived' && !order.ackBy && (
-                  <button type="button" className="btn primary" onClick={() => onAcknowledge(order)}>
-                    Acknowledge
-                  </button>
-                )}
-                {canHandover && order.status === 'arrived' && (
-                  <button
-                    type="button"
-                    className="btn solid"
-                    onClick={() => onConfirmHandover(order)}
-                  >
-                    Confirm handover
-                  </button>
-                )}
-                {(isDepartmentRole(role) || role === 'admin') && order.status === 'ready' && (
-                  <button type="button" className="btn ghost danger" onClick={() => onRemove(order)}>
-                    Remove
-                  </button>
-                )}
-              </div>
-            </li>
-          ))}
+          {visible.map((order) => {
+            const dwellFrom = order.status === 'arrived' ? order.arrivedAt : order.readyAt;
+            const stale = order.status === 'arrived' && isStaleWait(dwellFrom, now);
+            return (
+              <li
+                key={order.id}
+                className={[order.status === 'arrived' ? 'arrived' : '', stale ? 'stale' : '']
+                  .filter(Boolean)
+                  .join(' ')}
+              >
+                <div className="order-main">
+                  <span className="mono order-id">{order.id}</span>
+                  <span className={`status-pill ${order.status}`}>{statusLabel(order.status)}</span>
+                  <span>
+                    {order.pallets} plt{order.bay ? ` · Bay ${order.bay}` : ''} · {order.department}
+                    {order.door ? ` · Door ${order.door}` : ''}
+                  </span>
+                  <span className="muted">
+                    Ready by {order.readyBy} · {formatTime(order.readyAt)}
+                    {order.status === 'arrived'
+                      ? ` · waiting ${formatDwell(order.arrivedAt, now)}`
+                      : ` · ready ${formatDwell(order.readyAt, now)}`}
+                  </span>
+                </div>
+                <div className="order-actions">
+                  {canAck && canAcknowledge(order) && (
+                    <button type="button" className="btn primary" onClick={() => onAcknowledge(order)}>
+                      Acknowledge
+                    </button>
+                  )}
+                  {canHandover && canConfirmHandover(order) && (
+                    <button
+                      type="button"
+                      className="btn solid"
+                      onClick={() => onConfirmHandover(order)}
+                    >
+                      Confirm handover
+                    </button>
+                  )}
+                  {canCancelReady(order) && (isDepartmentRole(role) || role === 'admin') && (
+                    <button type="button" className="btn ghost danger" onClick={() => onCancel(order)}>
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       </div>
     </section>

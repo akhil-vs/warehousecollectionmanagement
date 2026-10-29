@@ -3,20 +3,27 @@ export type Department = (typeof DEPARTMENTS)[number];
 
 export type DeviceRole = 'admin' | 'dock' | Department;
 
-export type OrderStatus = 'ready' | 'arrived' | 'collected';
+export type OrderStatus = 'ready' | 'arrived' | 'collected' | 'cancelled';
 
 export type EventType =
   | 'ready'
   | 'driver_collection'
+  | 'driver_collection_cancelled'
   | 'acknowledged'
   | 'collected'
+  | 'handover_exception'
   | 'removed'
+  | 'cancelled'
   | 'reopened'
   | 'lookup_sent'
   | 'lookup_found'
-  | 'lookup_closed';
+  | 'lookup_closed'
+  | 'lookup_ours'
+  | 'lookup_not_ours';
 
 export type LookupStatus = 'open' | 'found' | 'closed';
+
+export type LookupResponse = 'ours' | 'not_ours';
 
 export interface Order {
   id: string;
@@ -31,6 +38,11 @@ export interface Order {
   ackBy?: string;
   collectedBy?: string;
   collectedAt?: number;
+  door?: string;
+  haulier?: string;
+  exceptionReason?: string;
+  cancelledBy?: string;
+  cancelledAt?: number;
 }
 
 export interface AppEvent {
@@ -40,6 +52,7 @@ export interface AppEvent {
   department?: Department | string;
   operator: string;
   at: number;
+  note?: string;
 }
 
 export interface Lookup {
@@ -48,6 +61,7 @@ export interface Lookup {
   sentBy: string;
   at: number;
   status: LookupStatus;
+  responses?: Partial<Record<Department, LookupResponse>>;
 }
 
 export type TabId =

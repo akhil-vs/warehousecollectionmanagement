@@ -40,6 +40,13 @@ export function useWarehouseData() {
         .sort((a, b) => (b.collectedAt ?? 0) - (a.collectedAt ?? 0)),
     [orders],
   );
+  const cancelledOrders = useMemo(
+    () =>
+      orders
+        .filter((o) => o.status === 'cancelled')
+        .sort((a, b) => (b.cancelledAt ?? 0) - (a.cancelledAt ?? 0)),
+    [orders],
+  );
   const openLookups = useMemo(
     () => lookups.filter((l) => l.status === 'open'),
     [lookups],
@@ -52,6 +59,7 @@ export function useWarehouseData() {
     readyOrders,
     arrivedOrders,
     collectedOrders,
+    cancelledOrders,
     openLookups,
   };
 }
