@@ -19,7 +19,8 @@ export type EventType =
   | 'lookup_found'
   | 'lookup_closed'
   | 'lookup_ours'
-  | 'lookup_not_ours';
+  | 'lookup_not_ours'
+  | 'updated';
 
 export type LookupStatus = 'open' | 'found' | 'closed';
 
@@ -31,6 +32,7 @@ export interface Order {
   pallets: number;
   bay?: string;
   department: Department;
+  collectionDate?: string;
   readyBy: string;
   readyAt: number;
   arrivedBy?: string;

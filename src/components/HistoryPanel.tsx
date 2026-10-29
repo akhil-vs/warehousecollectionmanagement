@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { AppEvent, DeviceRole, Order, OrderStatus } from '../types';
-import { eventLabel, formatTime, statusLabel } from '../lib/format';
+import { collectionDateLabel, eventLabel, formatTime, statusLabel } from '../lib/format';
 import { isDepartmentRole } from '../hooks/useDeviceRole';
 
 interface Props {
@@ -36,6 +36,7 @@ export function HistoryPanel({ role, orders, events }: Props) {
           o.id.toLowerCase().includes(term) ||
           o.department.toLowerCase().includes(term) ||
           o.readyBy.toLowerCase().includes(term) ||
+          (o.collectionDate || '').includes(term) ||
           (o.collectedBy || '').toLowerCase().includes(term) ||
           (o.cancelledBy || '').toLowerCase().includes(term),
       );
@@ -119,6 +120,7 @@ export function HistoryPanel({ role, orders, events }: Props) {
                 <th>Order</th>
                 <th>Status</th>
                 <th>Pallets</th>
+                <th>Collect</th>
                 <th>Dept</th>
                 <th>Ready</th>
                 <th>Driver / collected</th>
@@ -133,6 +135,7 @@ export function HistoryPanel({ role, orders, events }: Props) {
                     {o.pallets}
                     {o.bay ? ` · ${o.bay}` : ''}
                   </td>
+                  <td>{collectionDateLabel(o.collectionDate) ?? '—'}</td>
                   <td>{o.department}</td>
                   <td>
                     {o.readyBy}

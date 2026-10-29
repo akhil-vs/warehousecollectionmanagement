@@ -2,10 +2,23 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
 import type { Department, DeviceRole, Order } from '../types';
 import { DEPARTMENTS } from '../types';
-import { formatDwell, formatTime, isStaleWait, statusLabel } from '../lib/format';
+import {
+  collectionDateLabel,
+  formatDwell,
+  formatTime,
+  isCollectionOverdue,
+  isStaleWait,
+  statusLabel,
+} from '../lib/format';
 import { isDepartmentRole } from '../hooks/useDeviceRole';
 import { useNow } from '../hooks/useNow';
-import { canAcknowledge, canCancelReady, canConfirmHandover } from '../lib/orderState';
+import { canAcknowledge, canCancelReady, canConfirmHandover, canEditReady } from '../lib/orderState';
+
+export interface ReadyOrderPatch {
+  pallets: number;
+  bay?: string;
+  collectionDate?: string;
+}
 
 interface Props {
   role: DeviceRole;
@@ -18,12 +31,88 @@ interface Props {
     orderId: string;
     pallets?: number;
     bay?: string;
+    collectionDate?: string;
     department: Department;
     operator: string;
   }) => Promise<{ ok: true } | { ok: false; error: string }>;
+  updateReady: (
+    order: Order,
+    patch: ReadyOrderPatch,
+  ) => Promise<{ ok: true } | { ok: false; error: string }>;
   onAcknowledge: (order: Order) => void;
   onConfirmHandover: (order: Order) => void;
   onCancel: (order: Order) => void;
+}
+
+function ReadyOrderEditForm({
+  order,
+  busy,
+  error,
+  onSave,
+  onCancel,
+}: {
+  order: Order;
+  busy: boolean;
+  error: string | null;
+  onSave: (patch: ReadyOrderPatch) => Promise<boolean>;
+  onCancel: () => void;
+}) {
+  const [pallets, setPallets] = useState(String(order.pallets));
+  const [bay, setBay] = useState(order.bay ?? '');
+  const [collectionDate, setCollectionDate] = useState(order.collectionDate ?? '');
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    const n = Number(pallets);
+    if (!Number.isFinite(n) || n < 1) {
+      setLocalError('Pallet count must be at least 1.');
+      return;
+    }
+    setLocalError(null);
+    await onSave({
+      pallets: Math.floor(n),
+      bay: bay.trim() || undefined,
+      collectionDate: collectionDate.trim() || undefined,
+    });
+  }
+
+  return (
+    <form className="ready-edit-form" onSubmit={(e) => void submit(e)}>
+      <label className="field">
+        <span>Pallets</span>
+        <input
+          type="number"
+          min={1}
+          value={pallets}
+          onChange={(e) => setPallets(e.target.value)}
+          required
+          autoFocus
+        />
+      </label>
+      <label className="field">
+        <span>Bay (optional)</span>
+        <input value={bay} onChange={(e) => setBay(e.target.value)} />
+      </label>
+      <label className="field">
+        <span>Collection date</span>
+        <input
+          type="date"
+          value={collectionDate}
+          onChange={(e) => setCollectionDate(e.target.value)}
+        />
+      </label>
+      <div className="row-actions">
+        <button type="submit" className="btn primary" disabled={busy}>
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+        <button type="button" className="btn ghost" disabled={busy} onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+      {(localError || error) && <p className="form-error">{localError || error}</p>}
+    </form>
+  );
 }
 
 export function PalletReadyPanel({
@@ -34,6 +123,7 @@ export function PalletReadyPanel({
   onMarkedReady,
   onClearPrefill,
   markReady,
+  updateReady,
   onAcknowledge,
   onConfirmHandover,
   onCancel,
@@ -45,9 +135,13 @@ export function PalletReadyPanel({
   const [orderId, setOrderId] = useState('');
   const [pallets, setPallets] = useState('');
   const [bay, setBay] = useState('');
+  const [collectionDate, setCollectionDate] = useState('');
   const [department, setDepartment] = useState<Department>(deptDefault);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   useEffect(() => {
     if (prefillOrderId) {
@@ -60,6 +154,15 @@ export function PalletReadyPanel({
   useEffect(() => {
     if (isDepartmentRole(role)) setDepartment(role);
   }, [role]);
+
+  useEffect(() => {
+    if (!editingId) return;
+    const current = orders.find((o) => o.id === editingId);
+    if (!current || current.status !== 'ready') {
+      setEditingId(null);
+      setEditError(null);
+    }
+  }, [orders, editingId]);
 
   const visible = useMemo(() => {
     const live = isDepartmentRole(role)
@@ -75,6 +178,7 @@ export function PalletReadyPanel({
 
   const canAck = isDepartmentRole(role) || role === 'admin';
   const canHandover = isDepartmentRole(role);
+  const canEdit = isDepartmentRole(role) || role === 'admin';
 
   function parsedPallets(): number | undefined {
     const raw = pallets.trim();
@@ -88,6 +192,7 @@ export function PalletReadyPanel({
     setOrderId('');
     setPallets('');
     setBay('');
+    setCollectionDate('');
     setError(null);
     orderIdRef.current?.focus();
   }
@@ -109,6 +214,7 @@ export function PalletReadyPanel({
       orderId: id,
       pallets: parsedPallets(),
       bay: bay || undefined,
+      collectionDate: collectionDate || undefined,
       department: role === 'admin' ? department : deptDefault,
       operator,
     });
@@ -140,11 +246,28 @@ export function PalletReadyPanel({
     if (scannedSubmit && next.trim()) void save(next);
   }
 
+  async function saveEdit(order: Order, patch: ReadyOrderPatch): Promise<boolean> {
+    setEditBusy(true);
+    setEditError(null);
+    const result = await updateReady(order, patch);
+    setEditBusy(false);
+    if (!result.ok) {
+      setEditError(result.error);
+      return false;
+    }
+    setEditingId(null);
+    setEditError(null);
+    return true;
+  }
+
   return (
     <section className="panel">
       <div className="panel-head">
         <h2>Pallet ready</h2>
-        <p>Scan or type an order ID to mark it ready. Pallet count is optional and defaults to 1.</p>
+        <p>
+          Scan or type an order ID to mark it ready. Pallet count is optional and defaults to 1. Edit
+          a ready order to change pallets, bay, or collection date.
+        </p>
       </div>
 
       <form className="ready-form" onSubmit={submit} noValidate>
@@ -175,6 +298,14 @@ export function PalletReadyPanel({
           <span>Bay (optional)</span>
           <input value={bay} onChange={(e) => setBay(e.target.value)} />
         </label>
+        <label className="field">
+          <span>Collection date (optional)</span>
+          <input
+            type="date"
+            value={collectionDate}
+            onChange={(e) => setCollectionDate(e.target.value)}
+          />
+        </label>
         {role === 'admin' && (
           <label className="field">
             <span>Department</span>
@@ -202,11 +333,19 @@ export function PalletReadyPanel({
         <ul className="order-list">
           {visible.map((order) => {
             const dwellFrom = order.status === 'arrived' ? order.arrivedAt : order.readyAt;
-            const stale = order.status === 'arrived' && isStaleWait(dwellFrom, now);
+            const stale =
+              (order.status === 'arrived' && isStaleWait(dwellFrom, now)) ||
+              (order.status === 'ready' && isCollectionOverdue(order.collectionDate, now));
+            const collect = collectionDateLabel(order.collectionDate, now);
+            const editing = editingId === order.id;
             return (
               <li
                 key={order.id}
-                className={[order.status === 'arrived' ? 'arrived' : '', stale ? 'stale' : '']
+                className={[
+                  order.status === 'arrived' ? 'arrived' : '',
+                  stale ? 'stale' : '',
+                  editing ? 'editing' : '',
+                ]
                   .filter(Boolean)
                   .join(' ')}
               >
@@ -216,6 +355,7 @@ export function PalletReadyPanel({
                   <span>
                     {order.pallets} plt{order.bay ? ` · Bay ${order.bay}` : ''} · {order.department}
                     {order.door ? ` · Door ${order.door}` : ''}
+                    {collect ? ` · ${collect}` : ''}
                   </span>
                   <span className="muted">
                     Ready by {order.readyBy} · {formatTime(order.readyAt)}
@@ -224,27 +364,52 @@ export function PalletReadyPanel({
                       : ` · ready ${formatDwell(order.readyAt, now)}`}
                   </span>
                 </div>
-                <div className="order-actions">
-                  {canAck && canAcknowledge(order) && (
-                    <button type="button" className="btn primary" onClick={() => onAcknowledge(order)}>
-                      Acknowledge
-                    </button>
-                  )}
-                  {canHandover && canConfirmHandover(order) && (
-                    <button
-                      type="button"
-                      className="btn solid"
-                      onClick={() => onConfirmHandover(order)}
-                    >
-                      Confirm handover
-                    </button>
-                  )}
-                  {canCancelReady(order) && (isDepartmentRole(role) || role === 'admin') && (
-                    <button type="button" className="btn ghost danger" onClick={() => onCancel(order)}>
-                      Cancel
-                    </button>
-                  )}
-                </div>
+                {editing ? (
+                  <ReadyOrderEditForm
+                    order={order}
+                    busy={editBusy}
+                    error={editError}
+                    onSave={(patch) => saveEdit(order, patch)}
+                    onCancel={() => {
+                      setEditingId(null);
+                      setEditError(null);
+                    }}
+                  />
+                ) : (
+                  <div className="order-actions">
+                    {canAck && canAcknowledge(order) && (
+                      <button type="button" className="btn primary" onClick={() => onAcknowledge(order)}>
+                        Acknowledge
+                      </button>
+                    )}
+                    {canHandover && canConfirmHandover(order) && (
+                      <button
+                        type="button"
+                        className="btn solid"
+                        onClick={() => onConfirmHandover(order)}
+                      >
+                        Confirm handover
+                      </button>
+                    )}
+                    {canEdit && canEditReady(order) && (
+                      <button
+                        type="button"
+                        className="btn ghost"
+                        onClick={() => {
+                          setEditingId(order.id);
+                          setEditError(null);
+                        }}
+                      >
+                        Edit
+                      </button>
+                    )}
+                    {canCancelReady(order) && canEdit && (
+                      <button type="button" className="btn ghost danger" onClick={() => onCancel(order)}>
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                )}
               </li>
             );
           })}

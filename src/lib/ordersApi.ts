@@ -23,6 +23,7 @@ import type {
   Order,
 } from '../types';
 import { getDb, isFirebaseConfigured } from './firebase';
+import { parseDateInput } from './format';
 import {
   demoCloseLookupsForOrder,
   demoDeleteOrder,
@@ -67,6 +68,9 @@ function mapOrder(id: string, data: Record<string, unknown>): Order {
     pallets: Number(data.pallets),
     bay: (data.bay as string | undefined) || undefined,
     department: data.department as Department,
+    collectionDate: parseDateInput(
+      typeof data.collectionDate === 'string' ? data.collectionDate : undefined,
+    ),
     readyBy: String(data.readyBy ?? ''),
     readyAt: Number(data.readyAt ?? 0),
     arrivedBy: data.arrivedBy ? String(data.arrivedBy) : undefined,
@@ -179,10 +183,27 @@ function resolvePalletCount(pallets: number | undefined): number {
   return Math.floor(pallets);
 }
 
+function resolveCollectionDate(
+  value: string | undefined,
+): { ok: true; date?: string } | { ok: false; error: string } {
+  if (!value || !value.trim()) return { ok: true };
+  const parsed = parseDateInput(value);
+  if (!parsed) return { ok: false, error: 'Enter a valid collection date.' };
+  return { ok: true, date: parsed };
+}
+
+function readyEditNote(pallets: number, bay?: string, collectionDate?: string): string {
+  const parts = [`${pallets} plt`];
+  if (bay) parts.push(`Bay ${bay}`);
+  if (collectionDate) parts.push(`collect ${collectionDate}`);
+  return parts.join(' · ');
+}
+
 export async function markOrderReady(input: {
   orderId: string;
   pallets?: number;
   bay?: string;
+  collectionDate?: string;
   department: Department;
   operator: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -190,11 +211,14 @@ export async function markOrderReady(input: {
   if (!id) return { ok: false, error: 'Enter an order ID.' };
   if (!input.operator.trim()) return { ok: false, error: 'Enter your name at the top.' };
   const pallets = resolvePalletCount(input.pallets);
+  const collection = resolveCollectionDate(input.collectionDate);
+  if (!collection.ok) return collection;
 
   const payload = {
     status: 'ready' as const,
     pallets,
     bay: input.bay?.trim() || undefined,
+    collectionDate: collection.date,
     department: input.department,
     readyBy: input.operator.trim(),
     readyAt: Date.now(),
@@ -221,6 +245,7 @@ export async function markOrderReady(input: {
         status: payload.status,
         pallets: payload.pallets,
         bay: payload.bay || null,
+        collectionDate: payload.collectionDate || null,
         department: payload.department,
         readyBy: payload.readyBy,
         readyAt: payload.readyAt,
@@ -230,6 +255,59 @@ export async function markOrderReady(input: {
     return { ok: true };
   } catch (err) {
     return { ok: false, error: toUserError(err, 'Could not mark ready.') };
+  }
+}
+
+export async function updateReadyOrder(
+  order: Order,
+  operator: string,
+  patch: { pallets: number; bay?: string; collectionDate?: string },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!operator.trim()) return { ok: false, error: 'Enter your name at the top.' };
+  if (!Number.isFinite(patch.pallets) || patch.pallets < 1) {
+    return { ok: false, error: 'Pallet count must be at least 1.' };
+  }
+  const pallets = Math.floor(patch.pallets);
+  const collection = resolveCollectionDate(patch.collectionDate);
+  if (!collection.ok) return collection;
+  const bay = patch.bay?.trim() || undefined;
+  const note = readyEditNote(pallets, bay, collection.date);
+
+  if (!isFirebaseConfigured()) {
+    const existing = demoGetOrders().find((o) => o.id === order.id);
+    if (!existing) return { ok: false, error: 'Order not found.' };
+    if (existing.status !== 'ready') {
+      return { ok: false, error: 'Only ready orders can be edited.' };
+    }
+    demoUpsertOrder({
+      ...existing,
+      pallets,
+      bay,
+      collectionDate: collection.date,
+    });
+    demoLogEvent('updated', order.id, operator.trim(), existing.department, note);
+    return { ok: true };
+  }
+
+  try {
+    await runTransaction(getDb(), async (tx) => {
+      const ref = doc(ordersCol(), order.id);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new UserFacingError('Order not found.');
+      const existing = mapOrder(snap.id, snap.data());
+      if (existing.status !== 'ready') {
+        throw new UserFacingError('Only ready orders can be edited.');
+      }
+      tx.update(ref, {
+        pallets,
+        bay: bay || deleteField(),
+        collectionDate: collection.date || deleteField(),
+      });
+    });
+    await logEventFb('updated', order.id, operator.trim(), order.department, note);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: toUserError(err, 'Could not update order.') };
   }
 }
 
@@ -562,6 +640,7 @@ export async function reopenOrder(
       status: 'ready',
       pallets: existing.pallets,
       bay: existing.bay,
+      collectionDate: existing.collectionDate,
       department: existing.department,
       readyBy: existing.readyBy,
       readyAt: existing.readyAt,
