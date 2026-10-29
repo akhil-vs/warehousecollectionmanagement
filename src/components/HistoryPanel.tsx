@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import type { AppEvent, DeviceRole, Order, OrderStatus } from '../types';
-import { collectionDateLabel, eventLabel, formatTime, statusLabel } from '../lib/format';
+import { eventLabel, formatTime, statusLabel } from '../lib/format';
 import { isDepartmentRole } from '../hooks/useDeviceRole';
+import { useNow } from '../hooks/useNow';
+import { CollectionDateTables } from './CollectionDateTables';
 
 interface Props {
   role: DeviceRole;
@@ -16,6 +18,7 @@ interface OrderActivityGroup {
 }
 
 export function HistoryPanel({ role, orders, events }: Props) {
+  const now = useNow();
   const [q, setQ] = useState('');
   const [status, setStatus] = useState<'all' | OrderStatus>('all');
 
@@ -110,70 +113,58 @@ export function HistoryPanel({ role, orders, events }: Props) {
         </label>
       </div>
 
-      <div className="list-block">
-        <h3>Orders</h3>
-        {scopedOrders.length === 0 && <p className="empty">No matching orders.</p>}
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Order</th>
-                <th>Status</th>
-                <th>Pallets</th>
-                <th>Collect</th>
-                <th>Dept</th>
-                <th>Ready</th>
-                <th>Driver / collected</th>
-              </tr>
-            </thead>
-            <tbody>
-              {scopedOrders.map((o) => (
-                <tr key={o.id}>
-                  <td className="mono">{o.id}</td>
-                  <td>{statusLabel(o.status)}</td>
-                  <td>
-                    {o.pallets}
-                    {o.bay ? ` · ${o.bay}` : ''}
-                  </td>
-                  <td>{collectionDateLabel(o.collectionDate) ?? '—'}</td>
-                  <td>{o.department}</td>
-                  <td>
-                    {o.readyBy}
-                    <br />
-                    <span className="muted">{formatTime(o.readyAt)}</span>
-                  </td>
-                  <td>
-                    {o.arrivedBy && (
-                      <>
-                        Arrived {o.arrivedBy} · {formatTime(o.arrivedAt)}
-                        {o.door ? ` · Door ${o.door}` : ''}
-                        <br />
-                      </>
-                    )}
-                    {o.exceptionReason && (
-                      <>
-                        Exception: {o.exceptionReason}
-                        <br />
-                      </>
-                    )}
-                    {o.collectedBy ? (
-                      <>
-                        Collected {o.collectedBy} · {formatTime(o.collectedAt)}
-                      </>
-                    ) : o.cancelledBy ? (
-                      <>
-                        Cancelled {o.cancelledBy} · {formatTime(o.cancelledAt)}
-                      </>
-                    ) : (
-                      <span className="muted">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <CollectionDateTables
+        orders={scopedOrders}
+        now={now}
+        emptyText="No matching orders."
+        headers={
+          <>
+            <th>Order</th>
+            <th>Status</th>
+            <th>Pallets</th>
+            <th>Bay</th>
+            <th>Dept</th>
+            <th>Ready</th>
+            <th>Driver / collected</th>
+          </>
+        }
+        renderRow={(o) => (
+          <tr key={o.id}>
+            <td className="mono">{o.id}</td>
+            <td>{statusLabel(o.status)}</td>
+            <td>{o.pallets}</td>
+            <td>{o.bay || <span className="muted">—</span>}</td>
+            <td>{o.department}</td>
+            <td>
+              {o.readyBy}
+              <br />
+              <span className="muted">{formatTime(o.readyAt)}</span>
+            </td>
+            <td>
+              {o.arrivedBy && (
+                <>
+                  Arrived {o.arrivedBy} · {formatTime(o.arrivedAt)}
+                  {o.door ? ` · Door ${o.door}` : ''}
+                  <br />
+                </>
+              )}
+              {o.exceptionReason && (
+                <>
+                  Exception: {o.exceptionReason}
+                  <br />
+                </>
+              )}
+              {o.collectedBy ? (
+                <>Collected {o.collectedBy} · {formatTime(o.collectedAt)}</>
+              ) : o.cancelledBy ? (
+                <>Cancelled {o.cancelledBy} · {formatTime(o.cancelledAt)}</>
+              ) : (
+                <span className="muted">—</span>
+              )}
+            </td>
+          </tr>
+        )}
+      />
 
       <div className="list-block">
         <h3>Activity log</h3>

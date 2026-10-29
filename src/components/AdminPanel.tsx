@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import type { Order } from '../types';
 import { DEPARTMENTS } from '../types';
-import { formatDwell, formatTime, startOfLocalDay } from '../lib/format';
+import { formatDwell, formatTime, startOfLocalDay, statusLabel } from '../lib/format';
 import { useNow } from '../hooks/useNow';
+import { CollectionDateTables } from './CollectionDateTables';
 
 interface Props {
   orders: Order[];
@@ -48,6 +49,10 @@ export function AdminPanel({
     (o) => o.status === 'cancelled' && (o.cancelledAt ?? 0) >= dayStart,
   ).length;
   const readyNow = orders.filter((o) => o.status === 'ready').length;
+  const liveByDate = useMemo(
+    () => orders.filter((o) => o.status === 'ready' || o.status === 'arrived'),
+    [orders],
+  );
 
   const overview = useMemo(() => {
     return DEPARTMENTS.map((dept) => {
@@ -176,6 +181,38 @@ export function AdminPanel({
           </div>
         ))}
       </div>
+
+      <CollectionDateTables
+        orders={liveByDate}
+        now={now}
+        emptyText="No live orders."
+        headers={
+          <>
+            <th>Order</th>
+            <th>Status</th>
+            <th>Pallets</th>
+            <th>Bay</th>
+            <th>Dept</th>
+            <th>Ready</th>
+          </>
+        }
+        renderRow={(o) => (
+          <tr key={o.id} className={o.status === 'arrived' ? 'arrived' : undefined}>
+            <td className="mono">{o.id}</td>
+            <td>
+              <span className={`status-pill ${o.status}`}>{statusLabel(o.status)}</span>
+            </td>
+            <td>{o.pallets}</td>
+            <td>{o.bay || <span className="muted">—</span>}</td>
+            <td>{o.department}</td>
+            <td>
+              {o.readyBy}
+              <br />
+              <span className="muted">{formatTime(o.readyAt)}</span>
+            </td>
+          </tr>
+        )}
+      />
 
       <div className="admin-block">
         <h3>Order correction</h3>
