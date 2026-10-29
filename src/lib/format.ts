@@ -1,3 +1,4 @@
+import type { Order } from '../types';
 import { STALE_WAIT_MS } from './orderState';
 
 export function formatTime(ts?: number): string {
@@ -97,4 +98,76 @@ export function isCollectionOverdue(date: string | undefined, now = Date.now()):
   const parsed = parseDateInput(date);
   if (!parsed) return false;
   return parsed < todayInputValue(now);
+}
+
+export type CollectionDateKind = 'overdue' | 'today' | 'upcoming' | 'none';
+
+export interface CollectionDateGroup {
+  key: string;
+  date?: string;
+  kind: CollectionDateKind;
+  heading: string;
+  pallets: number;
+  orders: Order[];
+}
+
+export function collectionDateKind(date: string | undefined, now = Date.now()): CollectionDateKind {
+  const parsed = parseDateInput(date);
+  if (!parsed) return 'none';
+  const today = todayInputValue(now);
+  if (parsed === today) return 'today';
+  if (parsed < today) return 'overdue';
+  return 'upcoming';
+}
+
+export function collectionDateHeading(date: string | undefined, now = Date.now()): string {
+  const parsed = parseDateInput(date);
+  if (!parsed) return 'No collection date';
+  const pretty = formatDate(parsed);
+  const kind = collectionDateKind(parsed, now);
+  if (kind === 'today') return `Collect today · ${pretty}`;
+  if (kind === 'overdue') return `Overdue · ${pretty}`;
+  return `Collect ${pretty}`;
+}
+
+export function groupOrdersByCollectionDate(
+  orders: Order[],
+  now = Date.now(),
+): CollectionDateGroup[] {
+  const buckets = new Map<string, Order[]>();
+  for (const o of orders) {
+    const key = parseDateInput(o.collectionDate) ?? '';
+    const list = buckets.get(key) ?? [];
+    list.push(o);
+    buckets.set(key, list);
+  }
+
+  const keys = [...buckets.keys()].sort((a, b) => {
+    if (a === b) return 0;
+    if (!a) return 1;
+    if (!b) return -1;
+    return a.localeCompare(b);
+  });
+
+  return keys.map((key) => {
+    const date = key || undefined;
+    const list = [...(buckets.get(key) ?? [])].sort((a, b) => {
+      if (a.status !== b.status) {
+        if (a.status === 'arrived') return -1;
+        if (b.status === 'arrived') return 1;
+      }
+      const aTs = a.status === 'arrived' ? (a.arrivedAt ?? 0) : a.readyAt;
+      const bTs = b.status === 'arrived' ? (b.arrivedAt ?? 0) : b.readyAt;
+      return bTs - aTs;
+    });
+    const pallets = list.reduce((n, o) => n + (Number.isFinite(o.pallets) ? o.pallets : 0), 0);
+    return {
+      key: key || 'none',
+      date,
+      kind: collectionDateKind(date, now),
+      heading: collectionDateHeading(date, now),
+      pallets,
+      orders: list,
+    };
+  });
 }
