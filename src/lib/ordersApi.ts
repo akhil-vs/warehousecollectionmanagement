@@ -174,9 +174,14 @@ export async function setAdminPinHash(pinHash: string): Promise<void> {
   await setDoc(adminDoc(), { pinHash }, { merge: true });
 }
 
+function resolvePalletCount(pallets: number | undefined): number {
+  if (!Number.isFinite(pallets) || pallets === undefined || pallets < 1) return 1;
+  return Math.floor(pallets);
+}
+
 export async function markOrderReady(input: {
   orderId: string;
-  pallets: number;
+  pallets?: number;
   bay?: string;
   department: Department;
   operator: string;
@@ -184,13 +189,11 @@ export async function markOrderReady(input: {
   const id = input.orderId.trim().toUpperCase();
   if (!id) return { ok: false, error: 'Enter an order ID.' };
   if (!input.operator.trim()) return { ok: false, error: 'Enter your name at the top.' };
-  if (!Number.isFinite(input.pallets) || input.pallets < 1) {
-    return { ok: false, error: 'Pallet count must be at least 1.' };
-  }
+  const pallets = resolvePalletCount(input.pallets);
 
   const payload = {
     status: 'ready' as const,
-    pallets: input.pallets,
+    pallets,
     bay: input.bay?.trim() || undefined,
     department: input.department,
     readyBy: input.operator.trim(),

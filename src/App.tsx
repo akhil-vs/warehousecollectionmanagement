@@ -227,7 +227,7 @@ export default function App() {
   const handleMarkReady = useCallback(
     async (input: {
       orderId: string;
-      pallets: number;
+      pallets?: number;
       bay?: string;
       department: import('./types').Department;
       operator: string;
