@@ -1,6 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import type { FormEvent } from 'react';
 import type { Lookup, Order } from '../types';
-import { formatTime, statusLabel } from '../lib/format';
+import { DEPARTMENTS } from '../types';
+import { formatDwell, formatTime, isStaleWait, statusLabel } from '../lib/format';
+import { lookupClaimedBy } from '../lib/orderState';
+import { useNow } from '../hooks/useNow';
 
 interface Props {
   readyOrders: Order[];
@@ -8,7 +12,8 @@ interface Props {
   allOrders: Order[];
   openLookups: Lookup[];
   operator: string;
-  onDriverCollection: (order: Order) => void;
+  onDriverCollection: (order: Order, extras: { door?: string; haulier?: string }) => void;
+  onUndoCollection: (order: Order) => void;
   onSendLookup: (orderId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   onResendLookup: (lookup: Lookup) => void;
   onCloseLookup: (lookup: Lookup) => void;
@@ -21,11 +26,16 @@ export function DockPanel({
   openLookups,
   operator,
   onDriverCollection,
+  onUndoCollection,
   onSendLookup,
   onResendLookup,
   onCloseLookup,
 }: Props) {
+  const now = useNow();
+  const searchRef = useRef<HTMLInputElement>(null);
   const [q, setQ] = useState('');
+  const [door, setDoor] = useState('');
+  const [haulier, setHaulier] = useState('');
   const [lookupMsg, setLookupMsg] = useState<string | null>(null);
   const [lookupBusy, setLookupBusy] = useState(false);
 
@@ -42,9 +52,8 @@ export function DockPanel({
   }, [readyOrders, q]);
 
   const exactId = q.trim().toUpperCase();
-  const exactExisting = exactId
-    ? allOrders.find((o) => o.id === exactId)
-    : undefined;
+  const exactExisting = exactId ? allOrders.find((o) => o.id === exactId) : undefined;
+  const exactReady = exactId ? readyOrders.find((o) => o.id === exactId) : undefined;
   const noReadyMatch = Boolean(exactId) && filtered.length === 0;
 
   async function sendToDepartments() {
@@ -56,6 +65,24 @@ export function DockPanel({
     else setLookupMsg(`Sent ${exactId} to all departments.`);
   }
 
+  function collect(order: Order) {
+    onDriverCollection(order, {
+      door: door || undefined,
+      haulier: haulier || undefined,
+    });
+  }
+
+  async function onSearchSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (exactReady) {
+      collect(exactReady);
+      return;
+    }
+    if (noReadyMatch && !exactExisting && operator.trim()) {
+      await sendToDepartments();
+    }
+  }
+
   return (
     <section className="panel">
       <div className="panel-head">
@@ -63,17 +90,36 @@ export function DockPanel({
         <p>Find a ready order, alert the department, then wait for handover.</p>
       </div>
 
-      <label className="field search-field">
-        <span>Search ready list</span>
-        <input
-          value={q}
-          onChange={(e) => {
-            setQ(e.target.value);
-            setLookupMsg(null);
-          }}
-          placeholder="Order ID, department, bay, or who marked ready"
-        />
-      </label>
+      <form className="dock-meta" onSubmit={(e) => void onSearchSubmit(e)}>
+        <label className="field search-field">
+          <span>Search ready list</span>
+          <input
+            ref={searchRef}
+            value={q}
+            autoFocus
+            onChange={(e) => {
+              setQ(e.target.value);
+              setLookupMsg(null);
+            }}
+            placeholder="Scan or type order ID, department, bay, or who marked ready"
+          />
+        </label>
+        <label className="field">
+          <span>Door (optional)</span>
+          <input value={door} onChange={(e) => setDoor(e.target.value)} placeholder="e.g. 3" />
+        </label>
+        <label className="field">
+          <span>Haulier (optional)</span>
+          <input
+            value={haulier}
+            onChange={(e) => setHaulier(e.target.value)}
+            placeholder="Driver / haulier"
+          />
+        </label>
+        <button type="submit" className="btn ghost">
+          Go
+        </button>
+      </form>
 
       {noReadyMatch && (
         <div className="notice-block">
@@ -90,6 +136,12 @@ export function DockPanel({
                 ? ` (pressed by ${exactExisting.arrivedBy} at ${formatTime(exactExisting.arrivedAt)})`
                 : ''}
               .
+            </p>
+          )}
+          {exactExisting?.status === 'cancelled' && (
+            <p>
+              Order <span className="mono">{exactId}</span> was cancelled
+              {exactExisting.cancelledBy ? ` by ${exactExisting.cancelledBy}` : ''}.
             </p>
           )}
           {!exactExisting && (
@@ -114,7 +166,7 @@ export function DockPanel({
         {filtered.length === 0 && !noReadyMatch && <p className="empty">No ready pallets.</p>}
         <ul className="order-list">
           {filtered.map((order) => (
-            <li key={order.id}>
+            <li key={order.id} className={isStaleWait(order.readyAt, now) ? 'stale' : undefined}>
               <div className="order-main">
                 <span className="mono order-id">{order.id}</span>
                 <span className="status-pill ready">{statusLabel(order.status)}</span>
@@ -122,15 +174,12 @@ export function DockPanel({
                   {order.pallets} plt{order.bay ? ` · Bay ${order.bay}` : ''} · {order.department}
                 </span>
                 <span className="muted">
-                  Ready by {order.readyBy} · {formatTime(order.readyAt)}
+                  Ready by {order.readyBy} · {formatTime(order.readyAt)} · ready{' '}
+                  {formatDwell(order.readyAt, now)}
                 </span>
               </div>
               <div className="order-actions">
-                <button
-                  type="button"
-                  className="btn primary"
-                  onClick={() => onDriverCollection(order)}
-                >
+                <button type="button" className="btn primary" onClick={() => collect(order)}>
                   Driver collection
                 </button>
               </div>
@@ -142,19 +191,32 @@ export function DockPanel({
       <div className="list-block">
         <h3>Verified — awaiting handover</h3>
         {arrivedOrders.length === 0 && <p className="empty">None waiting.</p>}
-        <ul className="order-list readonly">
+        <ul className="order-list">
           {arrivedOrders.map((order) => (
-            <li key={order.id} className="arrived">
+            <li
+              key={order.id}
+              className={['arrived', isStaleWait(order.arrivedAt, now) ? 'stale' : '']
+                .filter(Boolean)
+                .join(' ')}
+            >
               <div className="order-main">
                 <span className="mono order-id">{order.id}</span>
                 <span className="status-pill arrived">Driver waiting</span>
                 <span>
                   {order.department}
                   {order.ackBy ? ` · Ack ${order.ackBy}` : ' · Not acknowledged'}
+                  {order.door ? ` · Door ${order.door}` : ''}
+                  {order.haulier ? ` · ${order.haulier}` : ''}
                 </span>
                 <span className="muted">
-                  Dock {order.arrivedBy} · {formatTime(order.arrivedAt)}
+                  Dock {order.arrivedBy} · {formatTime(order.arrivedAt)} · waiting{' '}
+                  {formatDwell(order.arrivedAt, now)}
                 </span>
+              </div>
+              <div className="order-actions">
+                <button type="button" className="btn ghost" onClick={() => onUndoCollection(order)}>
+                  Undo collection
+                </button>
               </div>
             </li>
           ))}
@@ -165,24 +227,44 @@ export function DockPanel({
         <div className="list-block">
           <h3>Open department lookups</h3>
           <ul className="order-list">
-            {openLookups.map((lookup) => (
-              <li key={lookup.id}>
-                <div className="order-main">
-                  <span className="mono order-id">{lookup.orderId}</span>
-                  <span className="muted">
-                    Sent by {lookup.sentBy} · {formatTime(lookup.at)}
-                  </span>
-                </div>
-                <div className="order-actions">
-                  <button type="button" className="btn ghost" onClick={() => onResendLookup(lookup)}>
-                    Resend
-                  </button>
-                  <button type="button" className="btn ghost" onClick={() => onCloseLookup(lookup)}>
-                    Close
-                  </button>
-                </div>
-              </li>
-            ))}
+            {openLookups.map((lookup) => {
+              const claimed = lookupClaimedBy(lookup);
+              const passed = DEPARTMENTS.filter((d) => lookup.responses?.[d] === 'not_ours');
+              return (
+                <li key={lookup.id}>
+                  <div className="order-main">
+                    <span className="mono order-id">{lookup.orderId}</span>
+                    <span className="muted">
+                      Sent by {lookup.sentBy} · {formatTime(lookup.at)} · open{' '}
+                      {formatDwell(lookup.at, now)}
+                    </span>
+                    <span className="muted">
+                      {claimed.length > 0
+                        ? `Claimed by ${claimed.join(', ')}`
+                        : passed.length > 0
+                          ? `${passed.join(', ')} said not ours`
+                          : 'No department has answered yet'}
+                    </span>
+                  </div>
+                  <div className="order-actions">
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      onClick={() => onResendLookup(lookup)}
+                    >
+                      Resend
+                    </button>
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      onClick={() => onCloseLookup(lookup)}
+                    >
+                      Close
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

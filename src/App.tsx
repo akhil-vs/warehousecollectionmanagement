@@ -9,21 +9,25 @@ import {
 } from './lib/notifications';
 import {
   acknowledgeOrder,
+  cancelOrder,
   closeOpenLookupsForOrder,
   confirmHandover,
   deleteOrderAdmin,
   driverCollection,
+  exceptionHandover,
   markOrderReady,
-  removeOrder,
   reopenOrder,
   resendLookup,
+  respondToLookup,
   sendLookup,
+  undoDriverCollection,
   updateLookupStatus,
 } from './lib/ordersApi';
 import { useDeviceRole, isDepartmentRole } from './hooks/useDeviceRole';
 import { useWarehouseData } from './hooks/useWarehouseData';
 import { RoleSetup } from './components/RoleSetup';
 import { AppHeader } from './components/AppHeader';
+import { ShiftBanner } from './components/ShiftBanner';
 import { AlertBanners } from './components/AlertBanners';
 import { PalletReadyPanel } from './components/PalletReadyPanel';
 import { DockPanel } from './components/DockPanel';
@@ -64,7 +68,6 @@ export default function App() {
   );
   const [soundBlocked, setSoundBlocked] = useState(true);
   const [prefillOrderId, setPrefillOrderId] = useState<string | undefined>();
-  const [dismissedLookupIds, setDismissedLookupIds] = useState<Set<string>>(() => new Set());
   const [toast, setToast] = useState<string | null>(null);
 
   const seenReady = useRef<Set<string>>(new Set());
@@ -123,9 +126,8 @@ export default function App() {
     updateTabTitle(waitingTitleCount);
   }, [waitingTitleCount]);
 
-  // Unacked nag every 30s for owning department
   useEffect(() => {
-    if (!device.role || !isDepartmentRole(device.role)) return;
+    if (!device.role || device.role === 'dock') return;
     const unacked = waitingForUs.filter((o) => !o.ackBy);
     if (unacked.length === 0) return;
     const id = window.setInterval(() => {
@@ -134,7 +136,6 @@ export default function App() {
     return () => window.clearInterval(id);
   }, [device.role, waitingForUs]);
 
-  // Live change sounds / toasts
   useEffect(() => {
     if (!device.role) return;
     const role = device.role;
@@ -216,8 +217,12 @@ export default function App() {
       setToast('Enter your name at the top first.');
       return false;
     }
+    if (device.shiftStale) {
+      setToast('Confirm your name for this shift first.');
+      return false;
+    }
     return true;
-  }, [device.operator]);
+  }, [device.operator, device.shiftStale]);
 
   const handleMarkReady = useCallback(
     async (input: {
@@ -227,6 +232,7 @@ export default function App() {
       department: import('./types').Department;
       operator: string;
     }) => {
+      if (!requireOperator()) return { ok: false as const, error: 'Confirm your name for this shift first.' };
       const result = await markOrderReady(input);
       if (result.ok) {
         await closeOpenLookupsForOrder(
@@ -237,7 +243,20 @@ export default function App() {
       }
       return result;
     },
-    [data.openLookups],
+    [data.openLookups, requireOperator],
+  );
+
+  const handleExceptionById = useCallback(
+    async (orderId: string, reason: string) => {
+      if (!requireOperator()) return { ok: false as const, error: 'Confirm your name first.' };
+      const order = data.arrivedOrders.find((o) => o.id === orderId.trim().toUpperCase());
+      if (!order) return { ok: false as const, error: 'No driver is waiting on that order.' };
+      if (!window.confirm(`Exception-collect ${order.id}? ${reason.trim()}`)) {
+        return { ok: false as const, error: 'Cancelled.' };
+      }
+      return exceptionHandover(order, device.operator, reason);
+    },
+    [data.arrivedOrders, device.operator, requireOperator],
   );
 
   if (bootError) {
@@ -304,19 +323,28 @@ export default function App() {
         }}
         soundBlocked={soundBlocked && !isSoundUnlocked()}
         onUnlockSound={() => void unlockSound().then((ok) => setSoundBlocked(!ok))}
-        onReassign={() => {
-          device.clearRole();
-          primed.current = false;
+        hideReassign={role === 'dock'}
+        reassignBusy={device.busy}
+        reassignError={device.error}
+        onReassign={async (pin) => {
+          const ok = await device.reassignWithPin(pin);
+          if (ok) primed.current = false;
+          return ok;
         }}
       />
+
+      {device.shiftStale && (
+        <ShiftBanner operator={device.operator} onConfirm={device.confirmShift} />
+      )}
 
       <AlertBanners
         waitingForUs={waitingForUs}
         openLookups={data.openLookups}
-        dismissedLookupIds={dismissedLookupIds}
+        department={isDepartmentRole(role) ? role : undefined}
         canRespondLookup={isDepartmentRole(role)}
         canAck={isDepartmentRole(role) || role === 'admin'}
-        canConfirmHandover={isDepartmentRole(role)}
+        canConfirmHandoverAction={isDepartmentRole(role)}
+        canExceptionHandover={role === 'admin'}
         onAcknowledge={(order) => {
           if (!requireOperator()) return;
           void acknowledgeOrder(order, device.operator).then((r) => {
@@ -325,18 +353,43 @@ export default function App() {
         }}
         onConfirmHandover={(order) => {
           if (!requireOperator()) return;
+          if (
+            !window.confirm(
+              `Confirm handover of ${order.id} (${order.pallets} pallet${order.pallets === 1 ? '' : 's'})?`,
+            )
+          ) {
+            return;
+          }
           void confirmHandover(order, device.operator).then((r) => {
             if (!r.ok) setToast(r.error);
             else setToast(`Collected ${order.id}`);
           });
         }}
+        onExceptionHandover={(order, reason) => {
+          if (!requireOperator()) return;
+          if (!reason.trim()) {
+            setToast('Enter a reason for the exception handover.');
+            return;
+          }
+          if (!window.confirm(`Exception-collect ${order.id}? ${reason.trim()}`)) return;
+          void exceptionHandover(order, device.operator, reason).then((r) => {
+            if (!r.ok) setToast(r.error);
+            else setToast(`Exception collected ${order.id}`);
+          });
+        }}
         onLookupOurs={(lookup) => {
+          if (!requireOperator()) return;
+          if (isDepartmentRole(role)) {
+            void respondToLookup(lookup, role, 'ours', device.operator);
+          }
           setPrefillOrderId(lookup.orderId);
           setTab('pallet-ready');
-          setDismissedLookupIds((prev) => new Set(prev).add(lookup.id));
         }}
         onLookupNotOurs={(lookup) => {
-          setDismissedLookupIds((prev) => new Set(prev).add(lookup.id));
+          if (!requireOperator()) return;
+          if (isDepartmentRole(role)) {
+            void respondToLookup(lookup, role, 'not_ours', device.operator);
+          }
         }}
       />
 
@@ -367,16 +420,31 @@ export default function App() {
             markReady={handleMarkReady}
             onAcknowledge={(order) => {
               if (!requireOperator()) return;
-              void acknowledgeOrder(order, device.operator);
+              void acknowledgeOrder(order, device.operator).then((r) => {
+                if (!r.ok) setToast(r.error);
+              });
             }}
             onConfirmHandover={(order) => {
               if (!requireOperator()) return;
-              void confirmHandover(order, device.operator);
+              if (
+                !window.confirm(
+                  `Confirm handover of ${order.id} (${order.pallets} pallet${order.pallets === 1 ? '' : 's'})?`,
+                )
+              ) {
+                return;
+              }
+              void confirmHandover(order, device.operator).then((r) => {
+                if (!r.ok) setToast(r.error);
+                else setToast(`Collected ${order.id}`);
+              });
             }}
-            onRemove={(order) => {
+            onCancel={(order) => {
               if (!requireOperator()) return;
-              if (!window.confirm(`Remove ready order ${order.id}?`)) return;
-              void removeOrder(order, device.operator);
+              if (!window.confirm(`Cancel ready order ${order.id}? It stays in history.`)) return;
+              void cancelOrder(order, device.operator).then((r) => {
+                if (!r.ok) setToast(r.error);
+                else setToast(`Cancelled ${order.id}`);
+              });
             }}
           />
         )}
@@ -388,10 +456,31 @@ export default function App() {
             allOrders={data.orders}
             openLookups={data.openLookups}
             operator={device.operator}
-            onDriverCollection={(order: Order) => {
+            onDriverCollection={(order: Order, extras) => {
               if (!requireOperator()) return;
-              void driverCollection(order, device.operator).then((r) => {
+              if (
+                !window.confirm(
+                  `Alert ${order.department} that a driver is here for ${order.id}?`,
+                )
+              ) {
+                return;
+              }
+              void driverCollection(order, device.operator, extras).then((r) => {
                 if (!r.ok) setToast(r.error);
+              });
+            }}
+            onUndoCollection={(order: Order) => {
+              if (!requireOperator()) return;
+              if (
+                !window.confirm(
+                  `Return ${order.id} to the ready list? The department alarm will stop.`,
+                )
+              ) {
+                return;
+              }
+              void undoDriverCollection(order, device.operator).then((r) => {
+                if (!r.ok) setToast(r.error);
+                else setToast(`Returned ${order.id} to ready`);
               });
             }}
             onSendLookup={async (orderId) => {
@@ -416,6 +505,7 @@ export default function App() {
         {showAdmin && (
           <AdminPanel
             orders={data.orders}
+            openLookupCount={data.openLookups.length}
             busy={device.busy}
             onReopen={(id) => {
               if (!requireOperator()) return Promise.resolve({ ok: false, error: 'Enter your name.' });
@@ -425,6 +515,7 @@ export default function App() {
               if (!requireOperator()) return Promise.resolve({ ok: false, error: 'Enter your name.' });
               return deleteOrderAdmin(id, device.operator);
             }}
+            onExceptionHandover={handleExceptionById}
             onChangePin={async (current, next) => {
               const ok = await device.changePin(current, next);
               if (!ok && device.error) setToast(device.error);

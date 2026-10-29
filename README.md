@@ -13,10 +13,11 @@ Live warehouse dock app: departments mark pallets ready, the dock alerts the own
 | Sees | Own department | Ready pallets (collected hidden) | Everything |
 | Mark ready | Own dept | No | Any dept |
 | Driver collection | No | Yes | Yes |
-| Confirm handover | Yes | No | No |
+| Confirm handover | Yes (after Acknowledge) | No | Exception only, with a reason |
+| Undo driver collection | No | Yes | Yes |
 | History | Own dept | Hidden | Full |
 
-Device role is chosen once with the admin PIN and stored in `localStorage` on that computer.
+Device role is chosen once with the admin PIN and stored in `localStorage` on that computer. Reassigning a department or admin PC requires the PIN again. Dock PCs hide reassign (kiosk). Operator names must be confirmed every 8 hours.
 
 ## Local development
 
@@ -62,15 +63,17 @@ npx firebase deploy --only firestore:rules
 
 1. Manager opens the live URL first, assigns **Admin**, creates the PIN.
 2. Assign each department PC (B2B / Therabody) and the dock PC with the PIN.
-3. On each computer: type the operator name → **Enable alerts** → tap once to unlock sound.
+3. On each computer: type the operator name → **Confirm shift** → **Enable alerts** → tap once to unlock sound.
 4. Test a dummy order: ready → driver collection → acknowledge → confirm handover.
-5. Test a dock search with no match → **Send to all departments**.
-6. Delete test orders from the Admin tab.
+5. Confirm handover is blocked until Acknowledge. From Admin, test **Exception handover** with a reason (department PC down).
+6. From Dock, undo a mistaken Driver collection, then collect again.
+7. Test a dock search with no match → **Send to all departments** → department **It is ours** / **Not ours** (answers are shared).
+8. Cancel a ready order from the department list (stays in History). Delete leftover test orders from the Admin tab.
 
 ## Limits
 
 - Device roles are not strong security; anyone with the URL and PIN can reassign a machine.
-- Operator names are typed (change them at shift change).
+- Operator names are typed and must be reconfirmed every 8 hours (and whenever the name changes).
 - Browser sound may stay silent on locked tablets until the page is tapped.
 - Collected orders stay in history; the dock only hides them from its ready list.
 

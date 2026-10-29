@@ -19,7 +19,7 @@ export function showBrowserNotification(title: string, body: string): void {
   if (typeof window === 'undefined' || !('Notification' in window)) return;
   if (Notification.permission !== 'granted') return;
   try {
-    new Notification(title, { body, silent: true });
+    new Notification(title, { body });
   } catch {
     // Ignore — some browsers block without service worker
   }

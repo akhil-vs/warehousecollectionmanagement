@@ -1,21 +1,53 @@
 import { useMemo, useState } from 'react';
 import type { Order } from '../types';
 import { DEPARTMENTS } from '../types';
+import { formatDwell, formatTime, startOfLocalDay } from '../lib/format';
+import { useNow } from '../hooks/useNow';
 
 interface Props {
   orders: Order[];
+  openLookupCount: number;
   busy: boolean;
   onReopen: (orderId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   onDelete: (orderId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  onExceptionHandover: (
+    orderId: string,
+    reason: string,
+  ) => Promise<{ ok: true } | { ok: false; error: string }>;
   onChangePin: (current: string, next: string) => Promise<boolean>;
 }
 
-export function AdminPanel({ orders, busy, onReopen, onDelete, onChangePin }: Props) {
+export function AdminPanel({
+  orders,
+  openLookupCount,
+  busy,
+  onReopen,
+  onDelete,
+  onExceptionHandover,
+  onChangePin,
+}: Props) {
+  const now = useNow();
+  const dayStart = startOfLocalDay(now);
   const [orderId, setOrderId] = useState('');
+  const [exceptionReason, setExceptionReason] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [currentPin, setCurrentPin] = useState('');
   const [nextPin, setNextPin] = useState('');
+
+  const waiting = useMemo(
+    () => orders.filter((o) => o.status === 'arrived').sort((a, b) => (a.arrivedAt ?? 0) - (b.arrivedAt ?? 0)),
+    [orders],
+  );
+  const unacked = waiting.filter((o) => !o.ackBy);
+  const oldestWaiting = waiting[0];
+  const collectedToday = orders.filter(
+    (o) => o.status === 'collected' && (o.collectedAt ?? 0) >= dayStart,
+  ).length;
+  const cancelledToday = orders.filter(
+    (o) => o.status === 'cancelled' && (o.cancelledAt ?? 0) >= dayStart,
+  ).length;
+  const readyNow = orders.filter((o) => o.status === 'ready').length;
 
   const overview = useMemo(() => {
     return DEPARTMENTS.map((dept) => {
@@ -24,10 +56,12 @@ export function AdminPanel({ orders, busy, onReopen, onDelete, onChangePin }: Pr
         dept,
         ready: mine.filter((o) => o.status === 'ready').length,
         waiting: mine.filter((o) => o.status === 'arrived').length,
-        collected: mine.filter((o) => o.status === 'collected').length,
+        collectedToday: mine.filter(
+          (o) => o.status === 'collected' && (o.collectedAt ?? 0) >= dayStart,
+        ).length,
       };
     });
-  }, [orders]);
+  }, [orders, dayStart]);
 
   async function reopen() {
     setMsg(null);
@@ -43,12 +77,24 @@ export function AdminPanel({ orders, busy, onReopen, onDelete, onChangePin }: Pr
   async function remove() {
     setMsg(null);
     setErr(null);
-    if (!window.confirm(`Delete order ${orderId.trim().toUpperCase()}?`)) return;
+    if (!window.confirm(`Permanently delete order ${orderId.trim().toUpperCase()}?`)) return;
     const r = await onDelete(orderId);
     if (!r.ok) setErr(r.error);
     else {
       setMsg(`Deleted ${orderId.trim().toUpperCase()}.`);
       setOrderId('');
+    }
+  }
+
+  async function exceptionCollect() {
+    setMsg(null);
+    setErr(null);
+    const r = await onExceptionHandover(orderId, exceptionReason);
+    if (!r.ok) setErr(r.error);
+    else {
+      setMsg(`Exception handover recorded for ${orderId.trim().toUpperCase()}.`);
+      setOrderId('');
+      setExceptionReason('');
     }
   }
 
@@ -67,7 +113,51 @@ export function AdminPanel({ orders, busy, onReopen, onDelete, onChangePin }: Pr
     <section className="panel">
       <div className="panel-head">
         <h2>Admin</h2>
-        <p>Overview, corrections, and PIN.</p>
+        <p>Today’s board, corrections, and PIN.</p>
+      </div>
+
+      <div className="overview-grid shift-kpis">
+        <div className="overview-item">
+          <h3>Today</h3>
+          <p>
+            <strong>{collectedToday}</strong> collected
+          </p>
+          <p>
+            <strong>{cancelledToday}</strong> cancelled
+          </p>
+          <p>
+            <strong>{readyNow}</strong> still ready
+          </p>
+        </div>
+        <div className="overview-item">
+          <h3>Waiting now</h3>
+          <p>
+            <strong>{waiting.length}</strong> drivers
+          </p>
+          <p>
+            <strong>{unacked.length}</strong> not acknowledged
+          </p>
+          <p>
+            <strong>{openLookupCount}</strong> open lookups
+          </p>
+        </div>
+        <div className="overview-item">
+          <h3>Oldest wait</h3>
+          {oldestWaiting ? (
+            <>
+              <p>
+                <strong className="mono">{oldestWaiting.id}</strong>
+              </p>
+              <p>{oldestWaiting.department}</p>
+              <p>
+                waiting {formatDwell(oldestWaiting.arrivedAt, now)} ·{' '}
+                {formatTime(oldestWaiting.arrivedAt)}
+              </p>
+            </>
+          ) : (
+            <p>None waiting.</p>
+          )}
+        </div>
       </div>
 
       <div className="overview-grid">
@@ -81,7 +171,7 @@ export function AdminPanel({ orders, busy, onReopen, onDelete, onChangePin }: Pr
               <strong>{row.waiting}</strong> driver waiting
             </p>
             <p>
-              <strong>{row.collected}</strong> collected
+              <strong>{row.collectedToday}</strong> collected today
             </p>
           </div>
         ))}
@@ -97,9 +187,25 @@ export function AdminPanel({ orders, busy, onReopen, onDelete, onChangePin }: Pr
             onChange={(e) => setOrderId(e.target.value.toUpperCase())}
           />
         </label>
+        <label className="field">
+          <span>Exception reason</span>
+          <input
+            value={exceptionReason}
+            onChange={(e) => setExceptionReason(e.target.value)}
+            placeholder="Required for exception handover"
+          />
+        </label>
         <div className="row-actions">
           <button type="button" className="btn primary" disabled={busy} onClick={() => void reopen()}>
             Reopen as ready
+          </button>
+          <button
+            type="button"
+            className="btn solid"
+            disabled={busy}
+            onClick={() => void exceptionCollect()}
+          >
+            Exception handover
           </button>
           <button type="button" className="btn ghost danger" disabled={busy} onClick={() => void remove()}>
             Delete order

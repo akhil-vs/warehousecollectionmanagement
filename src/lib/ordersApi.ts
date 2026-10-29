@@ -10,6 +10,7 @@ import {
   addDoc,
   query,
   orderBy,
+  runTransaction,
   type Unsubscribe,
 } from 'firebase/firestore';
 import type {
@@ -17,6 +18,7 @@ import type {
   Department,
   EventType,
   Lookup,
+  LookupResponse,
   LookupStatus,
   Order,
 } from '../types';
@@ -35,6 +37,12 @@ import {
   demoUpsertOrder,
   subscribeDemo,
 } from './demoStore';
+import {
+  UserFacingError,
+  markReadyConflict,
+  toUserError,
+  withLookupResponse,
+} from './orderState';
 
 function ordersCol() {
   return collection(getDb(), 'orders');
@@ -66,6 +74,22 @@ function mapOrder(id: string, data: Record<string, unknown>): Order {
     ackBy: data.ackBy ? String(data.ackBy) : undefined,
     collectedBy: data.collectedBy ? String(data.collectedBy) : undefined,
     collectedAt: data.collectedAt ? Number(data.collectedAt) : undefined,
+    door: data.door ? String(data.door) : undefined,
+    haulier: data.haulier ? String(data.haulier) : undefined,
+    exceptionReason: data.exceptionReason ? String(data.exceptionReason) : undefined,
+    cancelledBy: data.cancelledBy ? String(data.cancelledBy) : undefined,
+    cancelledAt: data.cancelledAt ? Number(data.cancelledAt) : undefined,
+  };
+}
+
+function mapLookup(id: string, data: Record<string, unknown>): Lookup {
+  return {
+    id,
+    orderId: String(data.orderId),
+    sentBy: String(data.sentBy),
+    at: Number(data.at),
+    status: data.status as LookupStatus,
+    responses: (data.responses as Lookup['responses']) || {},
   };
 }
 
@@ -74,6 +98,7 @@ async function logEventFb(
   orderId: string,
   operator: string,
   department?: Department | string,
+  note?: string,
 ): Promise<void> {
   await addDoc(eventsCol(), {
     type,
@@ -81,6 +106,7 @@ async function logEventFb(
     operator,
     department: department ?? null,
     at: Date.now(),
+    note: note ?? null,
   });
 }
 
@@ -114,6 +140,7 @@ export function subscribeEvents(cb: (events: AppEvent[]) => void): Unsubscribe {
           department: data.department ?? undefined,
           operator: String(data.operator),
           at: Number(data.at),
+          note: data.note ? String(data.note) : undefined,
         };
       }),
     );
@@ -128,18 +155,7 @@ export function subscribeLookups(cb: (lookups: Lookup[]) => void): Unsubscribe {
   }
   const q = query(lookupsCol(), orderBy('at', 'desc'));
   return onSnapshot(q, (snap) => {
-    cb(
-      snap.docs.map((d) => {
-        const data = d.data();
-        return {
-          id: d.id,
-          orderId: String(data.orderId),
-          sentBy: String(data.sentBy),
-          at: Number(data.at),
-          status: data.status as LookupStatus,
-        };
-      }),
-    );
+    cb(snap.docs.map((d) => mapLookup(d.id, d.data())));
   });
 }
 
@@ -172,59 +188,46 @@ export async function markOrderReady(input: {
     return { ok: false, error: 'Pallet count must be at least 1.' };
   }
 
+  const payload = {
+    status: 'ready' as const,
+    pallets: input.pallets,
+    bay: input.bay?.trim() || undefined,
+    department: input.department,
+    readyBy: input.operator.trim(),
+    readyAt: Date.now(),
+  };
+
   if (!isFirebaseConfigured()) {
     const existing = demoGetOrders().find((o) => o.id === id);
-    if (existing) {
-      if (existing.status === 'collected') {
-        return { ok: false, error: 'This order was already collected.' };
-      }
-      if (existing.department !== input.department) {
-        return { ok: false, error: 'already in use' };
-      }
-      return { ok: false, error: 'This order is already on the ready list.' };
-    }
-    const order: Order = {
-      id,
-      status: 'ready',
-      pallets: input.pallets,
-      bay: input.bay?.trim() || undefined,
-      department: input.department,
-      readyBy: input.operator.trim(),
-      readyAt: Date.now(),
-    };
-    demoUpsertOrder(order);
+    const conflict = markReadyConflict(existing, input.department);
+    if (conflict) return { ok: false, error: conflict };
+    demoUpsertOrder({ id, ...payload });
     demoLogEvent('ready', id, input.operator.trim(), input.department);
     demoCloseLookupsForOrder(id, 'found');
     return { ok: true };
   }
 
-  const ref = doc(ordersCol(), id);
-  const snap = await getDoc(ref);
-  if (snap.exists()) {
-    const existing = mapOrder(snap.id, snap.data());
-    if (existing.status === 'collected') {
-      return { ok: false, error: 'This order was already collected.' };
-    }
-    if (existing.department !== input.department) {
-      return { ok: false, error: 'already in use' };
-    }
-    return { ok: false, error: 'This order is already on the ready list.' };
+  try {
+    await runTransaction(getDb(), async (tx) => {
+      const ref = doc(ordersCol(), id);
+      const snap = await tx.get(ref);
+      const existing = snap.exists() ? mapOrder(snap.id, snap.data()) : undefined;
+      const conflict = markReadyConflict(existing, input.department);
+      if (conflict) throw new UserFacingError(conflict);
+      tx.set(ref, {
+        status: payload.status,
+        pallets: payload.pallets,
+        bay: payload.bay || null,
+        department: payload.department,
+        readyBy: payload.readyBy,
+        readyAt: payload.readyAt,
+      });
+    });
+    await logEventFb('ready', id, input.operator.trim(), input.department);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: toUserError(err, 'Could not mark ready.') };
   }
-
-  await setDoc(ref, {
-    status: 'ready',
-    pallets: input.pallets,
-    bay: input.bay?.trim() || null,
-    department: input.department,
-    readyBy: input.operator.trim(),
-    readyAt: Date.now(),
-  });
-  await logEventFb('ready', id, input.operator.trim(), input.department);
-
-  // Close open lookups for this order
-  // Client-side: listeners will also see; we update via a lightweight query on known open lookups
-  // Handled in markReadyCloseLookups helper called by UI with known lookups.
-  return { ok: true };
 }
 
 export async function closeOpenLookupsForOrder(
@@ -237,39 +240,114 @@ export async function closeOpenLookupsForOrder(
   );
   for (const l of targets) {
     // eslint-disable-next-line no-await-in-loop
-    await updateLookupStatus(l.id, 'found', operator);
+    await updateLookupStatus(l.id, 'found', operator, l.orderId);
   }
 }
 
 export async function driverCollection(
   order: Order,
   operator: string,
+  extras?: { door?: string; haulier?: string },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!operator.trim()) return { ok: false, error: 'Enter your name at the top.' };
-  if (order.status !== 'ready') {
-    return { ok: false, error: 'Order is not ready for collection.' };
-  }
+  const door = extras?.door?.trim() || undefined;
+  const haulier = extras?.haulier?.trim() || undefined;
 
   if (!isFirebaseConfigured()) {
+    if (order.status !== 'ready') {
+      return { ok: false, error: 'Order is not ready for collection.' };
+    }
     demoUpsertOrder({
       ...order,
       status: 'arrived',
       arrivedBy: operator.trim(),
       arrivedAt: Date.now(),
       ackBy: undefined,
+      door,
+      haulier,
+      exceptionReason: undefined,
     });
     demoLogEvent('driver_collection', order.id, operator.trim(), order.department);
     return { ok: true };
   }
 
-  await updateDoc(doc(ordersCol(), order.id), {
-    status: 'arrived',
-    arrivedBy: operator.trim(),
-    arrivedAt: Date.now(),
-    ackBy: deleteField(),
-  });
-  await logEventFb('driver_collection', order.id, operator.trim(), order.department);
-  return { ok: true };
+  try {
+    await runTransaction(getDb(), async (tx) => {
+      const ref = doc(ordersCol(), order.id);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new UserFacingError('Order not found.');
+      const existing = mapOrder(snap.id, snap.data());
+      if (existing.status !== 'ready') {
+        throw new UserFacingError('Order is not ready for collection.');
+      }
+      tx.update(ref, {
+        status: 'arrived',
+        arrivedBy: operator.trim(),
+        arrivedAt: Date.now(),
+        ackBy: deleteField(),
+        door: door || deleteField(),
+        haulier: haulier || deleteField(),
+        exceptionReason: deleteField(),
+      });
+    });
+    await logEventFb('driver_collection', order.id, operator.trim(), order.department);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: toUserError(err, 'Could not record driver collection.') };
+  }
+}
+
+export async function undoDriverCollection(
+  order: Order,
+  operator: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!operator.trim()) return { ok: false, error: 'Enter your name at the top.' };
+
+  if (!isFirebaseConfigured()) {
+    if (order.status !== 'arrived') {
+      return { ok: false, error: 'Order is not awaiting handover.' };
+    }
+    demoUpsertOrder({
+      ...order,
+      status: 'ready',
+      arrivedBy: undefined,
+      arrivedAt: undefined,
+      ackBy: undefined,
+      door: undefined,
+      haulier: undefined,
+    });
+    demoLogEvent('driver_collection_cancelled', order.id, operator.trim(), order.department);
+    return { ok: true };
+  }
+
+  try {
+    await runTransaction(getDb(), async (tx) => {
+      const ref = doc(ordersCol(), order.id);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new UserFacingError('Order not found.');
+      const existing = mapOrder(snap.id, snap.data());
+      if (existing.status !== 'arrived') {
+        throw new UserFacingError('Order is not awaiting handover.');
+      }
+      tx.update(ref, {
+        status: 'ready',
+        arrivedBy: deleteField(),
+        arrivedAt: deleteField(),
+        ackBy: deleteField(),
+        door: deleteField(),
+        haulier: deleteField(),
+      });
+    });
+    await logEventFb(
+      'driver_collection_cancelled',
+      order.id,
+      operator.trim(),
+      order.department,
+    );
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: toUserError(err, 'Could not undo collection.') };
+  }
 }
 
 export async function acknowledgeOrder(
@@ -277,19 +355,40 @@ export async function acknowledgeOrder(
   operator: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!operator.trim()) return { ok: false, error: 'Enter your name at the top.' };
-  if (order.status !== 'arrived') {
-    return { ok: false, error: 'No driver waiting on this order.' };
-  }
 
   if (!isFirebaseConfigured()) {
+    if (order.status !== 'arrived') {
+      return { ok: false, error: 'No driver waiting on this order.' };
+    }
+    if (order.ackBy) return { ok: true };
     demoUpsertOrder({ ...order, ackBy: operator.trim() });
     demoLogEvent('acknowledged', order.id, operator.trim(), order.department);
     return { ok: true };
   }
 
-  await updateDoc(doc(ordersCol(), order.id), { ackBy: operator.trim() });
-  await logEventFb('acknowledged', order.id, operator.trim(), order.department);
-  return { ok: true };
+  try {
+    let alreadyAcked = false;
+    await runTransaction(getDb(), async (tx) => {
+      const ref = doc(ordersCol(), order.id);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new UserFacingError('Order not found.');
+      const existing = mapOrder(snap.id, snap.data());
+      if (existing.status !== 'arrived') {
+        throw new UserFacingError('No driver waiting on this order.');
+      }
+      if (existing.ackBy) {
+        alreadyAcked = true;
+        return;
+      }
+      tx.update(ref, { ackBy: operator.trim() });
+    });
+    if (!alreadyAcked) {
+      await logEventFb('acknowledged', order.id, operator.trim(), order.department);
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: toUserError(err, 'Could not acknowledge.') };
+  }
 }
 
 export async function confirmHandover(
@@ -297,47 +396,151 @@ export async function confirmHandover(
   operator: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!operator.trim()) return { ok: false, error: 'Enter your name at the top.' };
-  if (order.status !== 'arrived') {
-    return { ok: false, error: 'Order is not awaiting handover.' };
-  }
 
   if (!isFirebaseConfigured()) {
+    if (order.status !== 'arrived') {
+      return { ok: false, error: 'Order is not awaiting handover.' };
+    }
+    if (!order.ackBy) {
+      return { ok: false, error: 'Acknowledge the driver first.' };
+    }
     demoUpsertOrder({
       ...order,
       status: 'collected',
       collectedBy: operator.trim(),
       collectedAt: Date.now(),
-      ackBy: order.ackBy || operator.trim(),
     });
     demoLogEvent('collected', order.id, operator.trim(), order.department);
     return { ok: true };
   }
 
-  await updateDoc(doc(ordersCol(), order.id), {
-    status: 'collected',
-    collectedBy: operator.trim(),
-    collectedAt: Date.now(),
-    ackBy: order.ackBy || operator.trim(),
-  });
-  await logEventFb('collected', order.id, operator.trim(), order.department);
-  return { ok: true };
+  try {
+    await runTransaction(getDb(), async (tx) => {
+      const ref = doc(ordersCol(), order.id);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new UserFacingError('Order not found.');
+      const existing = mapOrder(snap.id, snap.data());
+      if (existing.status !== 'arrived') {
+        throw new UserFacingError('Order is not awaiting handover.');
+      }
+      if (!existing.ackBy) {
+        throw new UserFacingError('Acknowledge the driver first.');
+      }
+      tx.update(ref, {
+        status: 'collected',
+        collectedBy: operator.trim(),
+        collectedAt: Date.now(),
+      });
+    });
+    await logEventFb('collected', order.id, operator.trim(), order.department);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: toUserError(err, 'Could not confirm handover.') };
+  }
 }
 
-export async function removeOrder(
+export async function exceptionHandover(
+  order: Order,
+  operator: string,
+  reason: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!operator.trim()) return { ok: false, error: 'Enter your name at the top.' };
+  const note = reason.trim();
+  if (!note) return { ok: false, error: 'Enter a reason for the exception handover.' };
+
+  if (!isFirebaseConfigured()) {
+    if (order.status !== 'arrived') {
+      return { ok: false, error: 'Order is not awaiting handover.' };
+    }
+    demoUpsertOrder({
+      ...order,
+      status: 'collected',
+      collectedBy: operator.trim(),
+      collectedAt: Date.now(),
+      exceptionReason: note,
+    });
+    demoLogEvent('handover_exception', order.id, operator.trim(), order.department, note);
+    demoLogEvent('collected', order.id, operator.trim(), order.department, note);
+    return { ok: true };
+  }
+
+  try {
+    await runTransaction(getDb(), async (tx) => {
+      const ref = doc(ordersCol(), order.id);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new UserFacingError('Order not found.');
+      const existing = mapOrder(snap.id, snap.data());
+      if (existing.status !== 'arrived') {
+        throw new UserFacingError('Order is not awaiting handover.');
+      }
+      tx.update(ref, {
+        status: 'collected',
+        collectedBy: operator.trim(),
+        collectedAt: Date.now(),
+        exceptionReason: note,
+      });
+    });
+    await logEventFb(
+      'handover_exception',
+      order.id,
+      operator.trim(),
+      order.department,
+      note,
+    );
+    await logEventFb('collected', order.id, operator.trim(), order.department, note);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: toUserError(err, 'Could not complete exception handover.') };
+  }
+}
+
+export async function cancelOrder(
   order: Order,
   operator: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!operator.trim()) return { ok: false, error: 'Enter your name at the top.' };
 
   if (!isFirebaseConfigured()) {
-    demoDeleteOrder(order.id);
-    demoLogEvent('removed', order.id, operator.trim(), order.department);
+    if (order.status !== 'ready') {
+      return { ok: false, error: 'Only ready orders can be cancelled.' };
+    }
+    demoUpsertOrder({
+      ...order,
+      status: 'cancelled',
+      cancelledBy: operator.trim(),
+      cancelledAt: Date.now(),
+    });
+    demoLogEvent('cancelled', order.id, operator.trim(), order.department);
     return { ok: true };
   }
 
-  await deleteDoc(doc(ordersCol(), order.id));
-  await logEventFb('removed', order.id, operator.trim(), order.department);
-  return { ok: true };
+  try {
+    await runTransaction(getDb(), async (tx) => {
+      const ref = doc(ordersCol(), order.id);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new UserFacingError('Order not found.');
+      const existing = mapOrder(snap.id, snap.data());
+      if (existing.status !== 'ready') {
+        throw new UserFacingError('Only ready orders can be cancelled.');
+      }
+      tx.update(ref, {
+        status: 'cancelled',
+        cancelledBy: operator.trim(),
+        cancelledAt: Date.now(),
+      });
+    });
+    await logEventFb('cancelled', order.id, operator.trim(), order.department);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: toUserError(err, 'Could not cancel order.') };
+  }
+}
+
+export async function removeOrder(
+  order: Order,
+  operator: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  return cancelOrder(order, operator);
 }
 
 export async function reopenOrder(
@@ -352,32 +555,45 @@ export async function reopenOrder(
     const existing = demoGetOrders().find((o) => o.id === id);
     if (!existing) return { ok: false, error: 'Order not found.' };
     demoUpsertOrder({
-      ...existing,
+      id: existing.id,
       status: 'ready',
-      arrivedBy: undefined,
-      arrivedAt: undefined,
-      ackBy: undefined,
-      collectedBy: undefined,
-      collectedAt: undefined,
+      pallets: existing.pallets,
+      bay: existing.bay,
+      department: existing.department,
+      readyBy: existing.readyBy,
+      readyAt: existing.readyAt,
     });
     demoLogEvent('reopened', id, operator.trim(), existing.department);
     return { ok: true };
   }
 
-  const ref = doc(ordersCol(), id);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return { ok: false, error: 'Order not found.' };
-  const existing = mapOrder(snap.id, snap.data());
-  await updateDoc(ref, {
-    status: 'ready',
-    arrivedBy: deleteField(),
-    arrivedAt: deleteField(),
-    ackBy: deleteField(),
-    collectedBy: deleteField(),
-    collectedAt: deleteField(),
-  });
-  await logEventFb('reopened', id, operator.trim(), existing.department);
-  return { ok: true };
+  try {
+    let department: Department | string = '';
+    await runTransaction(getDb(), async (tx) => {
+      const ref = doc(ordersCol(), id);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new UserFacingError('Order not found.');
+      const existing = mapOrder(snap.id, snap.data());
+      department = existing.department;
+      tx.update(ref, {
+        status: 'ready',
+        arrivedBy: deleteField(),
+        arrivedAt: deleteField(),
+        ackBy: deleteField(),
+        collectedBy: deleteField(),
+        collectedAt: deleteField(),
+        door: deleteField(),
+        haulier: deleteField(),
+        exceptionReason: deleteField(),
+        cancelledBy: deleteField(),
+        cancelledAt: deleteField(),
+      });
+    });
+    await logEventFb('reopened', id, operator.trim(), department);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: toUserError(err, 'Could not reopen order.') };
+  }
 }
 
 export async function deleteOrderAdmin(
@@ -419,6 +635,7 @@ export async function sendLookup(
       sentBy: operator.trim(),
       at: Date.now(),
       status: 'open',
+      responses: {},
     });
     demoLogEvent('lookup_sent', id, operator.trim());
     return { ok: true, lookup };
@@ -429,6 +646,7 @@ export async function sendLookup(
     sentBy: operator.trim(),
     at: Date.now(),
     status: 'open',
+    responses: {},
   });
   await logEventFb('lookup_sent', id, operator.trim());
   return {
@@ -439,6 +657,7 @@ export async function sendLookup(
       sentBy: operator.trim(),
       at: Date.now(),
       status: 'open',
+      responses: {},
     },
   };
 }
@@ -467,6 +686,40 @@ export async function updateLookupStatus(
   }
 }
 
+export async function respondToLookup(
+  lookup: Lookup,
+  department: Department,
+  response: LookupResponse,
+  operator: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!operator.trim()) return { ok: false, error: 'Enter your name at the top.' };
+
+  const next = withLookupResponse(lookup, department, response);
+  const eventType = response === 'ours' ? 'lookup_ours' : 'lookup_not_ours';
+
+  if (!isFirebaseConfigured()) {
+    demoUpdateLookup(lookup.id, {
+      responses: next.responses,
+      status: next.status,
+    });
+    demoLogEvent(eventType, lookup.orderId, operator.trim(), department);
+    if (next.status === 'closed' && lookup.status === 'open') {
+      demoLogEvent('lookup_closed', lookup.orderId, operator.trim(), department);
+    }
+    return { ok: true };
+  }
+
+  await updateDoc(doc(lookupsCol(), lookup.id), {
+    responses: next.responses ?? {},
+    status: next.status,
+  });
+  await logEventFb(eventType, lookup.orderId, operator.trim(), department);
+  if (next.status === 'closed' && lookup.status === 'open') {
+    await logEventFb('lookup_closed', lookup.orderId, operator.trim(), department);
+  }
+  return { ok: true };
+}
+
 export async function resendLookup(
   lookup: Lookup,
   operator: string,
@@ -478,6 +731,7 @@ export async function resendLookup(
       at: Date.now(),
       sentBy: operator.trim(),
       status: 'open',
+      responses: {},
     });
     demoLogEvent('lookup_sent', lookup.orderId, operator.trim());
     return { ok: true };
@@ -487,6 +741,7 @@ export async function resendLookup(
     at: Date.now(),
     sentBy: operator.trim(),
     status: 'open',
+    responses: {},
   });
   await logEventFb('lookup_sent', lookup.orderId, operator.trim());
   return { ok: true };

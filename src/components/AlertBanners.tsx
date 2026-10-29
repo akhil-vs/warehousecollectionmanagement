@@ -1,15 +1,20 @@
-import type { Lookup, Order } from '../types';
-import { formatTime } from '../lib/format';
+import { useState } from 'react';
+import type { Department, Lookup, Order } from '../types';
+import { formatDwell, formatTime } from '../lib/format';
+import { canAcknowledge, canConfirmHandover, lookupNeedsDepartment } from '../lib/orderState';
+import { useNow } from '../hooks/useNow';
 
 interface Props {
   waitingForUs: Order[];
   openLookups: Lookup[];
-  dismissedLookupIds: Set<string>;
+  department?: Department;
   canRespondLookup: boolean;
   canAck: boolean;
-  canConfirmHandover: boolean;
+  canConfirmHandoverAction: boolean;
+  canExceptionHandover: boolean;
   onAcknowledge: (order: Order) => void;
   onConfirmHandover: (order: Order) => void;
+  onExceptionHandover: (order: Order, reason: string) => void;
   onLookupOurs: (lookup: Lookup) => void;
   onLookupNotOurs: (lookup: Lookup) => void;
 }
@@ -17,16 +22,22 @@ interface Props {
 export function AlertBanners({
   waitingForUs,
   openLookups,
-  dismissedLookupIds,
+  department,
   canRespondLookup,
   canAck,
-  canConfirmHandover,
+  canConfirmHandoverAction,
+  canExceptionHandover,
   onAcknowledge,
   onConfirmHandover,
+  onExceptionHandover,
   onLookupOurs,
   onLookupNotOurs,
 }: Props) {
-  const visibleLookups = openLookups.filter((l) => !dismissedLookupIds.has(l.id));
+  const now = useNow();
+  const [reasons, setReasons] = useState<Record<string, string>>({});
+  const visibleLookups = canRespondLookup
+    ? openLookups.filter((l) => (department ? lookupNeedsDepartment(l, department) : true))
+    : [];
 
   if (waitingForUs.length === 0 && visibleLookups.length === 0) return null;
 
@@ -39,21 +50,45 @@ export function AlertBanners({
             <p>
               Order <span className="mono">{order.id}</span> · {order.pallets} pallet
               {order.pallets === 1 ? '' : 's'}
-              {order.bay ? ` · Bay ${order.bay}` : ''} · marked by {order.readyBy} · dock{' '}
-              {order.arrivedBy} at {formatTime(order.arrivedAt)}
+              {order.bay ? ` · Bay ${order.bay}` : ''}
+              {order.door ? ` · Door ${order.door}` : ''}
+              {order.haulier ? ` · ${order.haulier}` : ''} · marked by {order.readyBy} · dock{' '}
+              {order.arrivedBy} at {formatTime(order.arrivedAt)} · waiting{' '}
+              {formatDwell(order.arrivedAt, now)}
               {!order.ackBy ? ' · not acknowledged' : ` · ack ${order.ackBy}`}
             </p>
           </div>
           <div className="banner-actions">
-            {canAck && !order.ackBy && (
+            {canAck && canAcknowledge(order) && (
               <button type="button" className="btn primary" onClick={() => onAcknowledge(order)}>
                 Acknowledge
               </button>
             )}
-            {canConfirmHandover && (
+            {canConfirmHandoverAction && canConfirmHandover(order) && (
               <button type="button" className="btn solid" onClick={() => onConfirmHandover(order)}>
                 Confirm handover
               </button>
+            )}
+            {canExceptionHandover && (
+              <form
+                className="exception-row"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  onExceptionHandover(order, reasons[order.id] || '');
+                }}
+              >
+                <input
+                  value={reasons[order.id] || ''}
+                  onChange={(e) =>
+                    setReasons((prev) => ({ ...prev, [order.id]: e.target.value }))
+                  }
+                  placeholder="Exception reason"
+                  aria-label={`Exception reason for ${order.id}`}
+                />
+                <button type="submit" className="btn ghost">
+                  Exception handover
+                </button>
+              </form>
             )}
           </div>
         </div>
@@ -66,7 +101,7 @@ export function AlertBanners({
               <strong>Dock lookup</strong>
               <p>
                 Is order <span className="mono">{lookup.orderId}</span> yours? Sent by{' '}
-                {lookup.sentBy} at {formatTime(lookup.at)}
+                {lookup.sentBy} at {formatTime(lookup.at)} · open {formatDwell(lookup.at, now)}
               </p>
             </div>
             <div className="banner-actions">
