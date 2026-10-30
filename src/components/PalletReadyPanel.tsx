@@ -1,7 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
 import type { Department, DeviceRole, Order } from '../types';
-import { DEPARTMENTS } from '../types';
 import { formatDwell, formatTime, isCollectionOverdue, isStaleWait, statusLabel } from '../lib/format';
 import { isDepartmentRole } from '../hooks/useDeviceRole';
 import { useNow } from '../hooks/useNow';
@@ -16,6 +15,7 @@ export interface ReadyOrderPatch {
 
 interface Props {
   role: DeviceRole;
+  departments: Department[];
   operator: string;
   orders: Order[];
   prefillOrderId?: string;
@@ -111,6 +111,7 @@ function ReadyOrderEditForm({
 
 export function PalletReadyPanel({
   role,
+  departments,
   operator,
   orders,
   prefillOrderId,
@@ -123,7 +124,9 @@ export function PalletReadyPanel({
   onCancel,
 }: Props) {
   const now = useNow();
-  const deptDefault: Department = isDepartmentRole(role) ? role : 'B2B';
+  const deptDefault: Department = isDepartmentRole(role, departments)
+    ? role
+    : (departments[0] ?? 'B2B');
   const orderIdRef = useRef<HTMLInputElement>(null);
   const busyRef = useRef(false);
   const [orderId, setOrderId] = useState('');
@@ -146,8 +149,9 @@ export function PalletReadyPanel({
   }, [prefillOrderId, onClearPrefill]);
 
   useEffect(() => {
-    if (isDepartmentRole(role)) setDepartment(role);
-  }, [role]);
+    if (isDepartmentRole(role, departments)) setDepartment(role);
+    else if (!departments.includes(department) && departments[0]) setDepartment(departments[0]);
+  }, [role, departments, department]);
 
   useEffect(() => {
     if (!editingId) return;
@@ -159,7 +163,7 @@ export function PalletReadyPanel({
   }, [orders, editingId]);
 
   const visible = useMemo(() => {
-    const live = isDepartmentRole(role)
+    const live = isDepartmentRole(role, departments)
       ? orders.filter((o) => o.department === role && (o.status === 'ready' || o.status === 'arrived'))
       : orders.filter((o) => o.status === 'ready' || o.status === 'arrived');
     return [...live].sort((a, b) => {
@@ -168,11 +172,11 @@ export function PalletReadyPanel({
       const bTs = b.status === 'arrived' ? (b.arrivedAt ?? 0) : b.readyAt;
       return bTs - aTs;
     });
-  }, [orders, role]);
+  }, [orders, role, departments]);
 
-  const canAck = isDepartmentRole(role) || role === 'admin';
-  const canHandover = isDepartmentRole(role);
-  const canEdit = isDepartmentRole(role) || role === 'admin';
+  const canAck = isDepartmentRole(role, departments) || role === 'admin';
+  const canHandover = isDepartmentRole(role, departments);
+  const canEdit = isDepartmentRole(role, departments) || role === 'admin';
 
   function parsedPallets(): number | undefined {
     const raw = pallets.trim();
@@ -307,7 +311,7 @@ export function PalletReadyPanel({
               value={department}
               onChange={(e) => setDepartment(e.target.value as Department)}
             >
-              {DEPARTMENTS.map((d) => (
+              {departments.map((d) => (
                 <option key={d} value={d}>
                   {d}
                 </option>

@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import type { Lookup, Order } from '../types';
-import { DEPARTMENTS } from '../types';
+import type { Department, Lookup, Order } from '../types';
 import { formatDwell, formatTime, isCollectionOverdue, isStaleWait } from '../lib/format';
 import { lookupClaimedBy } from '../lib/orderState';
 import { useNow } from '../hooks/useNow';
@@ -12,6 +11,7 @@ interface Props {
   arrivedOrders: Order[];
   allOrders: Order[];
   openLookups: Lookup[];
+  departments: Department[];
   operator: string;
   onDriverCollection: (order: Order, extras: { door?: string; haulier?: string }) => void;
   onUndoCollection: (order: Order) => void;
@@ -25,6 +25,7 @@ export function DockPanel({
   arrivedOrders,
   allOrders,
   openLookups,
+  departments,
   operator,
   onDriverCollection,
   onUndoCollection,
@@ -163,45 +164,75 @@ export function DockPanel({
         </div>
       )}
 
-      <CollectionDateTables
-        orders={filtered}
-        now={now}
-        emptyText={noReadyMatch ? undefined : 'No ready pallets.'}
-        headers={
-          <>
-            <th>Order</th>
-            <th>Pallets</th>
-            <th>Bay</th>
-            <th>Dept</th>
-            <th>Ready</th>
-            <th>Actions</th>
-          </>
-        }
-        renderRow={(order) => {
+      <div className="dock-ready-cards" aria-label="Ready orders">
+        {filtered.length === 0 && !noReadyMatch && <p className="empty">No ready pallets.</p>}
+        {filtered.map((order) => {
           const stale =
             isStaleWait(order.readyAt, now) || isCollectionOverdue(order.collectionDate, now);
           return (
-            <tr key={order.id} className={stale ? 'stale' : undefined}>
-              <td className="mono">{order.id}</td>
-              <td>{order.pallets}</td>
-              <td>{order.bay || <span className="muted">—</span>}</td>
-              <td>{order.department}</td>
-              <td>
-                {order.readyBy}
-                <br />
-                <span className="muted">
-                  {formatTime(order.readyAt)} · ready {formatDwell(order.readyAt, now)}
+            <article
+              key={order.id}
+              className={['dock-card', stale ? 'stale' : ''].filter(Boolean).join(' ')}
+            >
+              <div className="dock-card-main">
+                <span className="mono order-id">{order.id}</span>
+                <span>
+                  {order.pallets} plt{order.bay ? ` · Bay ${order.bay}` : ''} · {order.department}
                 </span>
-              </td>
-              <td className="table-actions">
-                <button type="button" className="btn primary" onClick={() => collect(order)}>
-                  Driver collection
-                </button>
-              </td>
-            </tr>
+                <span className="muted">
+                  {order.readyBy} · {formatTime(order.readyAt)} · ready{' '}
+                  {formatDwell(order.readyAt, now)}
+                </span>
+              </div>
+              <button type="button" className="btn primary" onClick={() => collect(order)}>
+                Driver collection
+              </button>
+            </article>
           );
-        }}
-      />
+        })}
+      </div>
+
+      <div className="dock-ready-tables">
+        <CollectionDateTables
+          orders={filtered}
+          now={now}
+          emptyText={noReadyMatch ? undefined : 'No ready pallets.'}
+          headers={
+            <>
+              <th>Order</th>
+              <th>Pallets</th>
+              <th>Bay</th>
+              <th>Dept</th>
+              <th>Ready</th>
+              <th>Actions</th>
+            </>
+          }
+          renderRow={(order) => {
+            const stale =
+              isStaleWait(order.readyAt, now) || isCollectionOverdue(order.collectionDate, now);
+            return (
+              <tr key={order.id} className={stale ? 'stale' : undefined}>
+                <td className="mono">{order.id}</td>
+                <td>{order.pallets}</td>
+                <td>{order.bay || <span className="muted">—</span>}</td>
+                <td>{order.department}</td>
+                <td>
+                  {order.readyBy}
+                  <br />
+                  <span className="muted">
+                    {formatTime(order.readyAt)} · ready {formatDwell(order.readyAt, now)}
+                  </span>
+                </td>
+                <td className="table-actions">
+                  <button type="button" className="btn primary" onClick={() => collect(order)}>
+                    Driver collection
+                  </button>
+                </td>
+              </tr>
+            );
+          }}
+        />
+      </div>
 
       <div className="list-block">
         <h3>Verified — awaiting handover</h3>
@@ -243,8 +274,8 @@ export function DockPanel({
           <h3>Open department lookups</h3>
           <ul className="order-list">
             {openLookups.map((lookup) => {
-              const claimed = lookupClaimedBy(lookup);
-              const passed = DEPARTMENTS.filter((d) => lookup.responses?.[d] === 'not_ours');
+              const claimed = lookupClaimedBy(lookup, departments);
+              const passed = departments.filter((d) => lookup.responses?.[d] === 'not_ours');
               return (
                 <li key={lookup.id}>
                   <div className="order-main">

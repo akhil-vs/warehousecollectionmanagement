@@ -5,21 +5,35 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Clients may subscribe for live UI. All mutations go through Cloud Functions
+    // (Admin SDK), which bypass these rules after server-side validation.
     match /orders/{orderId} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if false;
     }
 
     match /events/{eventId} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if false;
     }
 
     match /lookups/{lookupId} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if false;
     }
 
-    // PIN protection is client-side; tighten with Cloud Functions later if needed.
+    // PIN hash must not be client-readable. Departments/settings are OK to read.
+    match /config/admin {
+      allow read, write: if false;
+    }
+
+    match /config/settings {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
     match /config/{docId} {
-      allow read, write: if signedIn();
+      allow read, write: if false;
     }
   }
 }

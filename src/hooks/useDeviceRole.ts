@@ -1,28 +1,32 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { DeviceRole } from '../types';
-import { DEPARTMENTS } from '../types';
-import { getAdminPinHash, setAdminPinHash } from '../lib/ordersApi';
-import { hashPin, verifyPin } from '../lib/pin';
+import {
+  bootstrapAdminPin,
+  changeAdminPin,
+  getBootstrapState,
+  verifyAdminPin,
+} from '../lib/ordersApi';
 import { SHIFT_MS } from '../lib/orderState';
 import { useNow } from './useNow';
+import { useDepartments, isDepartmentRole } from './useDepartments';
+
+export { isDepartmentRole } from './useDepartments';
 
 const ROLE_KEY = 'wc_device_role';
 const OPERATOR_KEY = 'wc_operator_name';
 const CONFIRMED_NAME_KEY = 'wc_operator_confirmed_name';
 const CONFIRMED_AT_KEY = 'wc_operator_confirmed_at';
 
-export function isDepartmentRole(role: DeviceRole | null): role is (typeof DEPARTMENTS)[number] {
-  return role === 'B2B' || role === 'Therabody';
+function readSavedRole(): DeviceRole | null {
+  const saved = localStorage.getItem(ROLE_KEY);
+  if (!saved) return null;
+  if (saved === 'admin' || saved === 'dock') return saved;
+  return saved;
 }
 
 export function useDeviceRole() {
-  const [role, setRoleState] = useState<DeviceRole | null>(() => {
-    const saved = localStorage.getItem(ROLE_KEY);
-    if (saved === 'admin' || saved === 'dock' || saved === 'B2B' || saved === 'Therabody') {
-      return saved;
-    }
-    return null;
-  });
+  const departments = useDepartments();
+  const [role, setRoleState] = useState<DeviceRole | null>(() => readSavedRole());
   const [operator, setOperatorState] = useState(() => localStorage.getItem(OPERATOR_KEY) || '');
   const [confirmedName, setConfirmedName] = useState(
     () => localStorage.getItem(CONFIRMED_NAME_KEY) || '',
@@ -40,8 +44,8 @@ export function useDeviceRole() {
     let cancelled = false;
     (async () => {
       try {
-        const hash = await getAdminPinHash();
-        if (!cancelled) setPinConfigured(Boolean(hash));
+        const state = await getBootstrapState();
+        if (!cancelled) setPinConfigured(state.pinConfigured);
       } catch {
         if (!cancelled) setPinConfigured(false);
       }
@@ -50,6 +54,15 @@ export function useDeviceRole() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!role || role === 'admin' || role === 'dock') return;
+    if (departments.length > 0 && !departments.includes(role)) {
+      // Stale department assignment after config change — force reassign.
+      localStorage.removeItem(ROLE_KEY);
+      setRoleState(null);
+    }
+  }, [role, departments]);
 
   const setOperator = useCallback((name: string) => {
     setOperatorState(name);
@@ -83,21 +96,28 @@ export function useDeviceRole() {
     setBusy(true);
     setError(null);
     try {
-      const existing = await getAdminPinHash();
-      if (!existing) {
-        if (pin.trim().length < 4) {
-          setError('Choose an admin PIN with at least 4 digits.');
+      const state = await getBootstrapState();
+      if (!state.pinConfigured) {
+        const boot = await bootstrapAdminPin(pin);
+        if (!boot.ok) {
+          setError(boot.error);
           return false;
         }
-        const hash = await hashPin(pin.trim());
-        await setAdminPinHash(hash);
         setPinConfigured(true);
       } else {
-        const ok = await verifyPin(pin.trim(), existing);
-        if (!ok) {
-          setError('Incorrect admin PIN.');
+        const verified = await verifyAdminPin(pin);
+        if (!verified.ok) {
+          setError(verified.error);
           return false;
         }
+      }
+      if (
+        nextRole !== 'admin' &&
+        nextRole !== 'dock' &&
+        !isDepartmentRole(nextRole, state.departments.length ? state.departments : departments)
+      ) {
+        setError('Unknown department role.');
+        return false;
       }
       localStorage.setItem(ROLE_KEY, nextRole);
       setRoleState(nextRole);
@@ -108,27 +128,17 @@ export function useDeviceRole() {
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [departments]);
 
   const changePin = useCallback(async (currentPin: string, nextPin: string) => {
     setBusy(true);
     setError(null);
     try {
-      const existing = await getAdminPinHash();
-      if (!existing) {
-        setError('No admin PIN is set yet.');
+      const result = await changeAdminPin(currentPin, nextPin);
+      if (!result.ok) {
+        setError(result.error);
         return false;
       }
-      const ok = await verifyPin(currentPin.trim(), existing);
-      if (!ok) {
-        setError('Current PIN is incorrect.');
-        return false;
-      }
-      if (nextPin.trim().length < 4) {
-        setError('New PIN must be at least 4 characters.');
-        return false;
-      }
-      await setAdminPinHash(await hashPin(nextPin.trim()));
       return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not change PIN.');
@@ -147,14 +157,14 @@ export function useDeviceRole() {
     setBusy(true);
     setError(null);
     try {
-      const existing = await getAdminPinHash();
-      if (!existing) {
+      const state = await getBootstrapState();
+      if (!state.pinConfigured) {
         clearRole();
         return true;
       }
-      const ok = await verifyPin(pin.trim(), existing);
-      if (!ok) {
-        setError('Incorrect admin PIN.');
+      const verified = await verifyAdminPin(pin);
+      if (!verified.ok) {
+        setError(verified.error);
         return false;
       }
       clearRole();
@@ -181,5 +191,6 @@ export function useDeviceRole() {
     changePin,
     clearRole,
     reassignWithPin,
+    departments,
   };
 }

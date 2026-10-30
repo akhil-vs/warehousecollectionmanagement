@@ -6,6 +6,7 @@ import {
   type Auth,
 } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getFunctions, type Functions } from 'firebase/functions';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY as string | undefined,
@@ -15,6 +16,8 @@ const firebaseConfig = {
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID as string | undefined,
   appId: import.meta.env.VITE_FIREBASE_APP_ID as string | undefined,
 };
+
+const FUNCTIONS_REGION = 'europe-west2';
 
 export function isFirebaseConfigured(): boolean {
   return Boolean(
@@ -28,6 +31,7 @@ export function isFirebaseConfigured(): boolean {
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let db: Firestore | null = null;
+let functions: Functions | null = null;
 
 export function getFirebaseApp(): FirebaseApp {
   if (!isFirebaseConfigured()) {
@@ -51,6 +55,13 @@ export function getDb(): Firestore {
     db = getFirestore(getFirebaseApp());
   }
   return db;
+}
+
+export function getFirebaseFunctions(): Functions {
+  if (!functions) {
+    functions = getFunctions(getFirebaseApp(), FUNCTIONS_REGION);
+  }
+  return functions;
 }
 
 export function ensureAnonymousAuth(): Promise<void> {

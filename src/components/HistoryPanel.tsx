@@ -7,6 +7,7 @@ import { CollectionDateTables } from './CollectionDateTables';
 
 interface Props {
   role: DeviceRole;
+  departments: string[];
   orders: Order[];
   events: AppEvent[];
 }
@@ -17,7 +18,7 @@ interface OrderActivityGroup {
   latestAt: number;
 }
 
-export function HistoryPanel({ role, orders, events }: Props) {
+export function HistoryPanel({ role, departments, orders, events }: Props) {
   const now = useNow();
   const [q, setQ] = useState('');
   const [status, setStatus] = useState<'all' | OrderStatus>('all');
@@ -28,7 +29,7 @@ export function HistoryPanel({ role, orders, events }: Props) {
         (b.collectedAt || b.cancelledAt || b.arrivedAt || b.readyAt) -
         (a.collectedAt || a.cancelledAt || a.arrivedAt || a.readyAt),
     );
-    if (isDepartmentRole(role)) {
+    if (isDepartmentRole(role, departments)) {
       list = list.filter((o) => o.department === role);
     }
     if (status !== 'all') list = list.filter((o) => o.status === status);
@@ -45,14 +46,14 @@ export function HistoryPanel({ role, orders, events }: Props) {
       );
     }
     return list;
-  }, [orders, role, q, status]);
+  }, [orders, role, departments, q, status]);
 
   const scopedEvents = useMemo(() => {
-    if (isDepartmentRole(role)) {
+    if (isDepartmentRole(role, departments)) {
       return events.filter((e) => e.department === role);
     }
     return events;
-  }, [events, role]);
+  }, [events, role, departments]);
 
   const activityByOrder = useMemo(() => {
     const term = q.trim().toLowerCase();
