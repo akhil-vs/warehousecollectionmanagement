@@ -452,6 +452,40 @@
   gap: 0.45rem;
 }
 
+.collection-date-block {
+  margin-top: 1.5rem;
+}
+
+.collection-date-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.65rem;
+}
+
+.collection-date-block h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.collection-date-head .muted {
+  margin: 0;
+}
+
+.collection-date-block.today h3 {
+  color: var(--accent-ink);
+}
+
+.collection-date-block.overdue h3 {
+  color: #8a5a12;
+}
+
 .table-wrap {
   overflow-x: auto;
 }
@@ -476,6 +510,26 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+.data-table tr.arrived td {
+  background: rgba(255, 236, 230, 0.7);
+}
+
+.data-table tr.stale td {
+  background: rgba(255, 240, 200, 0.45);
+}
+
+.data-table td.table-actions {
+  white-space: nowrap;
+}
+
+.data-table td.table-actions .btn {
+  margin: 0.15rem 0.25rem 0.15rem 0;
+}
+
+.data-table .ready-edit-form {
+  margin: 0.25rem 0;
 }
 
 .event-list {
