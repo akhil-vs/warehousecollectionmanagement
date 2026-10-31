@@ -28,33 +28,31 @@ export function CollectionDateField({
         {optional ? ' (optional)' : ''}
       </span>
       <div className="collection-date-controls">
+        <button
+          type="button"
+          className={value === today ? 'btn ghost active-quick' : 'btn ghost'}
+          onClick={() => onChange(today)}
+        >
+          Today
+        </button>
         <input
           id={id}
           type="date"
           value={value}
           onChange={(e) => onChange(e.target.value)}
         />
-        <div className="date-quick">
-          <button
-            type="button"
-            className={value === today ? 'btn ghost active-quick' : 'btn ghost'}
-            onClick={() => onChange(today)}
-          >
-            Today
+        <button
+          type="button"
+          className={value === tomorrow ? 'btn ghost active-quick' : 'btn ghost'}
+          onClick={() => onChange(tomorrow)}
+        >
+          Tomorrow
+        </button>
+        {value ? (
+          <button type="button" className="btn ghost subtle" onClick={() => onChange('')}>
+            Clear
           </button>
-          <button
-            type="button"
-            className={value === tomorrow ? 'btn ghost active-quick' : 'btn ghost'}
-            onClick={() => onChange(tomorrow)}
-          >
-            Tomorrow
-          </button>
-          {value ? (
-            <button type="button" className="btn ghost subtle" onClick={() => onChange('')}>
-              Clear
-            </button>
-          ) : null}
-        </div>
+        ) : null}
       </div>
     </label>
   );
