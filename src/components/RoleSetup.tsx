@@ -16,7 +16,7 @@ export function RoleSetup({ pinConfigured, departments, busy, error, onAssign }:
   return (
     <div className="setup-screen">
       <div className="setup-panel">
-        <p className="brand-mark">Collecto</p>
+        <p className="brand-mark">FreightFetch</p>
         <h1>Assign this computer</h1>
         <p className="lede">
           {pinConfigured

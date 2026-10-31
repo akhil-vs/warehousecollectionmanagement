@@ -1,4 +1,4 @@
-const BASE_TITLE = 'Collecto';
+const BASE_TITLE = 'FreightFetch';
 
 export function updateTabTitle(waitingCount: number): void {
   if (typeof document === 'undefined') return;
