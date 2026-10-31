@@ -103,68 +103,102 @@ function resolveCollectionDate(
   return { ok: true, date: parsed };
 }
 
-export function subscribeOrders(cb: (orders: Order[]) => void): Unsubscribe {
+type SnapshotErrorHandler = (error: Error) => void;
+
+function toListenError(err: unknown, fallback: string): Error {
+  return err instanceof Error ? err : new Error(fallback);
+}
+
+export function subscribeOrders(
+  cb: (orders: Order[]) => void,
+  onError?: SnapshotErrorHandler,
+): Unsubscribe {
   if (!isFirebaseConfigured()) {
     const push = () => cb(demoGetOrders());
     push();
     return subscribeDemo(push);
   }
-  return onSnapshot(ordersCol(), (snap) => {
-    const list = snap.docs.map((d) => mapOrder(d.id, d.data()));
-    cb(list);
-  });
+  return onSnapshot(
+    ordersCol(),
+    (snap) => {
+      const list = snap.docs.map((d) => mapOrder(d.id, d.data()));
+      cb(list);
+    },
+    (err) => onError?.(toListenError(err, 'Could not load orders.')),
+  );
 }
 
-export function subscribeEvents(cb: (events: AppEvent[]) => void): Unsubscribe {
+export function subscribeEvents(
+  cb: (events: AppEvent[]) => void,
+  onError?: SnapshotErrorHandler,
+): Unsubscribe {
   if (!isFirebaseConfigured()) {
     const push = () => cb(demoGetEvents());
     push();
     return subscribeDemo(push);
   }
   const q = query(eventsCol(), orderBy('at', 'desc'));
-  return onSnapshot(q, (snap) => {
-    cb(
-      snap.docs.map((d) => {
-        const data = d.data();
-        return {
-          id: d.id,
-          type: data.type as AppEvent['type'],
-          orderId: String(data.orderId),
-          department: data.department ?? undefined,
-          operator: String(data.operator),
-          at: Number(data.at),
-          note: data.note ? String(data.note) : undefined,
-        };
-      }),
-    );
-  });
+  return onSnapshot(
+    q,
+    (snap) => {
+      cb(
+        snap.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            type: data.type as AppEvent['type'],
+            orderId: String(data.orderId),
+            department: data.department ?? undefined,
+            operator: String(data.operator),
+            at: Number(data.at),
+            note: data.note ? String(data.note) : undefined,
+          };
+        }),
+      );
+    },
+    (err) => onError?.(toListenError(err, 'Could not load events.')),
+  );
 }
 
-export function subscribeLookups(cb: (lookups: Lookup[]) => void): Unsubscribe {
+export function subscribeLookups(
+  cb: (lookups: Lookup[]) => void,
+  onError?: SnapshotErrorHandler,
+): Unsubscribe {
   if (!isFirebaseConfigured()) {
     const push = () => cb(demoGetLookups());
     push();
     return subscribeDemo(push);
   }
   const q = query(lookupsCol(), orderBy('at', 'desc'));
-  return onSnapshot(q, (snap) => {
-    cb(snap.docs.map((d) => mapLookup(d.id, d.data())));
-  });
+  return onSnapshot(
+    q,
+    (snap) => {
+      cb(snap.docs.map((d) => mapLookup(d.id, d.data())));
+    },
+    (err) => onError?.(toListenError(err, 'Could not load lookups.')),
+  );
 }
 
-export function subscribeDepartments(cb: (departments: Department[]) => void): Unsubscribe {
+export function subscribeDepartments(
+  cb: (departments: Department[]) => void,
+  onError?: SnapshotErrorHandler,
+): Unsubscribe {
   if (!isFirebaseConfigured()) {
     const push = () => cb(demoGetDepartments());
     push();
     return subscribeDemo(push);
   }
-  return onSnapshot(doc(getDb(), 'config', 'settings'), (snap) => {
-    if (!snap.exists()) {
-      cb([...DEFAULT_DEPARTMENTS]);
-      return;
-    }
-    cb(normalizeDepartments(snap.data().departments));
-  });
+  return onSnapshot(
+    doc(getDb(), 'config', 'settings'),
+    (snap) => {
+      if (!snap.exists()) {
+        cb([...DEFAULT_DEPARTMENTS]);
+        return;
+      }
+      cb(normalizeDepartments(snap.data().departments));
+    },
+    (err) => onError?.(toListenError(err, 'Could not load departments.')),
+  );
 }
 
 export async function getBootstrapState(): Promise<{

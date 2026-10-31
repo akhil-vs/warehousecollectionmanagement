@@ -10,11 +10,15 @@ export function useWarehouseData() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [events, setEvents] = useState<AppEvent[]>([]);
   const [lookups, setLookups] = useState<Lookup[]>([]);
+  const [listenError, setListenError] = useState<string | null>(null);
 
   useEffect(() => {
-    const u1 = subscribeOrders(setOrders);
-    const u2 = subscribeEvents(setEvents);
-    const u3 = subscribeLookups(setLookups);
+    const onError = (err: Error) => {
+      setListenError(err.message || 'Could not load warehouse data from Firebase.');
+    };
+    const u1 = subscribeOrders(setOrders, onError);
+    const u2 = subscribeEvents(setEvents, onError);
+    const u3 = subscribeLookups(setLookups, onError);
     return () => {
       u1();
       u2();
@@ -61,5 +65,6 @@ export function useWarehouseData() {
     collectedOrders,
     cancelledOrders,
     openLookups,
+    listenError,
   };
 }

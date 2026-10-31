@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { DeviceRole, Lookup, Order, TabId } from './types';
 import { isFirebaseConfigured, ensureAnonymousAuth } from './lib/firebase';
 import { isSoundUnlocked, unlockSound } from './lib/sound';
@@ -71,10 +71,56 @@ function tabsFor(role: DeviceRole): { id: TabId; label: string; icon: 'pallet' |
   ];
 }
 
-function AppShell() {
+function BootScreen({ title, message }: { title?: string; message: string }) {
+  return (
+    <div className="setup-screen">
+      <div className="setup-panel">
+        <div className="setup-brand">
+          <span className="brand-icon" aria-hidden>
+            <IconWarehouse />
+          </span>
+          <p className="brand-mark">FreightFetch</p>
+        </div>
+        {title ? <h1>{title}</h1> : null}
+        <p className="lede">{message}</p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Auth must finish before any Firestore listeners mount. Rules require signed-in
+ * users; starting onSnapshot too early ends the listener with permission-denied
+ * and the UI stays empty even though Firebase already has data.
+ */
+function FirebaseBootGate({ children }: { children: ReactNode }) {
   const [bootError, setBootError] = useState<string | null>(null);
   const [booted, setBooted] = useState(!isFirebaseConfigured());
-  const [demoMode] = useState(!isFirebaseConfigured());
+
+  useEffect(() => {
+    if (!isFirebaseConfigured()) return;
+    let cancelled = false;
+    ensureAnonymousAuth()
+      .then(() => {
+        if (!cancelled) setBooted(true);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setBootError(err instanceof Error ? err.message : 'Firebase auth failed');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (bootError) return <BootScreen title="Cannot connect" message={bootError} />;
+  if (!booted) return <BootScreen message="Connecting…" />;
+  return <>{children}</>;
+}
+
+function AppShell() {
+  const demoMode = !isFirebaseConfigured();
   const device = useDeviceRole();
   const data = useWarehouseData();
   const confirm = useConfirm();
@@ -97,18 +143,6 @@ function AppShell() {
     onToast: showToast,
     resetKey: alertResetKey,
   });
-
-  useEffect(() => {
-    if (!isFirebaseConfigured()) {
-      setBooted(true);
-      return;
-    }
-    ensureAnonymousAuth()
-      .then(() => setBooted(true))
-      .catch((err) =>
-        setBootError(err instanceof Error ? err.message : 'Firebase auth failed'),
-      );
-  }, []);
 
   useEffect(() => {
     if (device.role) setTab(defaultTab(device.role));
@@ -203,37 +237,8 @@ function AppShell() {
     [confirm, data.arrivedOrders, device.operator, requireAdminPin, requireOperator],
   );
 
-  if (bootError) {
-    return (
-      <div className="setup-screen">
-        <div className="setup-panel">
-          <div className="setup-brand">
-            <span className="brand-icon" aria-hidden>
-              <IconWarehouse />
-            </span>
-            <p className="brand-mark">FreightFetch</p>
-          </div>
-          <h1>Cannot connect</h1>
-          <p className="lede">{bootError}</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!booted) {
-    return (
-      <div className="setup-screen">
-        <div className="setup-panel">
-          <div className="setup-brand">
-            <span className="brand-icon" aria-hidden>
-              <IconWarehouse />
-            </span>
-            <p className="brand-mark">FreightFetch</p>
-          </div>
-          <p className="lede">Connecting…</p>
-        </div>
-      </div>
-    );
+  if (data.listenError) {
+    return <BootScreen title="Cannot load warehouse data" message={data.listenError} />;
   }
 
   if (!device.role) {
@@ -540,7 +545,9 @@ function AppShell() {
 export default function App() {
   return (
     <ConfirmProvider>
-      <AppShell />
+      <FirebaseBootGate>
+        <AppShell />
+      </FirebaseBootGate>
     </ConfirmProvider>
   );
 }
