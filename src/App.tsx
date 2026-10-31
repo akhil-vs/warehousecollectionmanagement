@@ -193,7 +193,7 @@ function AppShell() {
     return (
       <div className="setup-screen">
         <div className="setup-panel">
-          <p className="brand-mark">Collecto</p>
+          <p className="brand-mark">FreightFetch</p>
           <h1>Cannot connect</h1>
           <p className="lede">{bootError}</p>
         </div>
@@ -205,7 +205,7 @@ function AppShell() {
     return (
       <div className="setup-screen">
         <div className="setup-panel">
-          <p className="brand-mark">Collecto</p>
+          <p className="brand-mark">FreightFetch</p>
           <p className="lede">Connecting…</p>
         </div>
       </div>
