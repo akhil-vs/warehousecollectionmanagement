@@ -1,4 +1,5 @@
 import { dateInputValueOffset, todayInputValue } from '../lib/format';
+import { IconCalendar } from './Icons';
 
 interface Props {
   value: string;
@@ -21,7 +22,8 @@ export function CollectionDateField({
 
   return (
     <label className="field collection-date-field">
-      <span>
+      <span className="icon-label">
+        <IconCalendar />
         {label}
         {optional ? ' (optional)' : ''}
       </span>

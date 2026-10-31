@@ -4,6 +4,7 @@ import { eventLabel, formatTime, statusLabel } from '../lib/format';
 import { isDepartmentRole } from '../hooks/useDeviceRole';
 import { useNow } from '../hooks/useNow';
 import { CollectionDateTables } from './CollectionDateTables';
+import { IconActivity, IconHistory, IconSearch } from './Icons';
 
 interface Props {
   role: DeviceRole;
@@ -93,17 +94,26 @@ export function HistoryPanel({ role, departments, orders, events }: Props) {
   return (
     <section className="panel">
       <div className="panel-head">
-        <h2>History</h2>
+        <div className="panel-title">
+          <IconHistory />
+          <h2>History</h2>
+        </div>
         <p>Order history and activity for your scope.</p>
       </div>
 
       <div className="history-filters">
         <label className="field">
-          <span>Search</span>
+          <span className="icon-label">
+            <IconSearch />
+            Search
+          </span>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Order, dept, name" />
         </label>
         <label className="field">
-          <span>Status</span>
+          <span className="icon-label">
+            <IconActivity />
+            Status
+          </span>
           <select value={status} onChange={(e) => setStatus(e.target.value as 'all' | OrderStatus)}>
             <option value="all">All</option>
             <option value="ready">Ready</option>
@@ -168,7 +178,10 @@ export function HistoryPanel({ role, departments, orders, events }: Props) {
       />
 
       <div className="list-block">
-        <h3>Activity log</h3>
+        <h3 className="icon-inline">
+          <IconActivity />
+          Activity log
+        </h3>
         {activityByOrder.length === 0 && <p className="empty">No activity yet.</p>}
         <div className="activity-accordion">
           {activityByOrder.map((group) => (

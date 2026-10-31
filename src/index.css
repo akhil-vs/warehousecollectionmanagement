@@ -5,9 +5,14 @@
   --muted: #6a645a;
   --line: rgba(28, 25, 20, 0.1);
   --line-strong: rgba(28, 25, 20, 0.22);
+  --surface: rgba(255, 255, 255, 0.88);
+  --surface-solid: #fffdf8;
   --accent: #e0a045;
   --accent-hot: #f0b45a;
   --accent-ink: #8a5a12;
+  --accent-deep: #c45c26;
+  --danger: #8b1e1e;
+  --ok: #2f6b3a;
   --font-display: 'Archivo Black', 'Arial Black', sans-serif;
   --font-body: 'Source Sans 3', 'Segoe UI', sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
@@ -38,16 +43,23 @@ body {
   margin: 0;
   min-width: 320px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.25), transparent 18rem),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28), transparent 16rem),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 47px,
+      rgba(28, 25, 20, 0.028) 47px,
+      rgba(28, 25, 20, 0.028) 48px
+    ),
     repeating-linear-gradient(
       90deg,
       transparent,
       transparent 47px,
-      rgba(28, 25, 20, 0.03) 47px,
-      rgba(28, 25, 20, 0.03) 48px
+      rgba(28, 25, 20, 0.028) 47px,
+      rgba(28, 25, 20, 0.028) 48px
     ),
-    radial-gradient(ellipse at 70% -10%, rgba(224, 160, 69, 0.22), transparent 42%),
-    linear-gradient(165deg, #e7e1d4 0%, #d2d8dc 48%, #c9d0c8 100%);
+    radial-gradient(ellipse at 72% -8%, rgba(224, 160, 69, 0.2), transparent 42%),
+    linear-gradient(165deg, #e8e2d5 0%, #d4dade 50%, #cbd2ca 100%);
   background-attachment: fixed;
 }
 
