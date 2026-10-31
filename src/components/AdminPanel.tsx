@@ -385,6 +385,69 @@ export function AdminPanel({
             <th>Actions</th>
           </>
         }
+        renderCard={(o) => {
+          const editing = editingId === o.id;
+          return (
+            <article
+              className={['dock-card', o.status === 'arrived' ? 'arrived' : '', editing ? 'editing' : '']
+                .filter(Boolean)
+                .join(' ')}
+            >
+              <div className="dock-card-main">
+                <span className="mono order-id">{o.id}</span>
+                <span className={`status-pill ${o.status}`}>{statusLabel(o.status)}</span>
+                <span>
+                  {o.pallets} plt{o.bay ? ` · Bay ${o.bay}` : ''} · {o.department}
+                </span>
+                <span className="muted">
+                  {collectionDateLabel(o.collectionDate, now) ?? 'No collection date'}
+                  {' · '}
+                  {o.readyBy} · {formatTime(o.readyAt)}
+                </span>
+              </div>
+              {editing ? (
+                <ReadyOrderEditForm
+                  order={o}
+                  busy={editBusy}
+                  error={editError}
+                  onSave={async (patch) => {
+                    setEditBusy(true);
+                    setEditError(null);
+                    const result = await updateReady(o, patch);
+                    setEditBusy(false);
+                    if (!result.ok) {
+                      setEditError(result.error);
+                      return false;
+                    }
+                    setEditingId(null);
+                    setMsg(`Updated ${o.id}`);
+                    return true;
+                  }}
+                  onCancel={() => {
+                    setEditingId(null);
+                    setEditError(null);
+                  }}
+                />
+              ) : (
+                canEditReady(o) && (
+                  <div className="order-actions">
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      onClick={() => {
+                        setEditingId(o.id);
+                        setEditError(null);
+                      }}
+                    >
+                      <IconEdit />
+                      Edit
+                    </button>
+                  </div>
+                )
+              )}
+            </article>
+          );
+        }}
         renderRow={(o) => {
           const editing = editingId === o.id;
           return (

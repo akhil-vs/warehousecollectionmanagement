@@ -157,6 +157,11 @@ function AppShell() {
   }, [device.role]);
 
   useEffect(() => {
+    const active = document.querySelector<HTMLElement>('.tabs .tab.active');
+    active?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
+  }, [tab]);
+
+  useEffect(() => {
     void unlockSound().then((ok) => setSoundBlocked(!ok));
     const onFirst = () => {
       void unlockSound().then((ok) => setSoundBlocked(!ok));

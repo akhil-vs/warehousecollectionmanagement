@@ -1,6 +1,11 @@
 import { useMemo, useState } from 'react';
 import type { AppEvent, DeviceRole, Order, OrderStatus } from '../types';
-import { eventLabel, formatTime, statusLabel } from '../lib/format';
+import {
+  collectionDateLabel,
+  eventLabel,
+  formatTime,
+  statusLabel,
+} from '../lib/format';
 import { isDepartmentRole } from '../hooks/useDeviceRole';
 import { useNow } from '../hooks/useNow';
 import { CollectionDateTables } from './CollectionDateTables';
@@ -147,6 +152,39 @@ export function HistoryPanel({ role, departments, orders, events }: Props) {
             <th>Driver / collected</th>
           </>
         }
+        renderCard={(o) => (
+          <article className="dock-card">
+            <div className="dock-card-main">
+              <span className="mono order-id">{o.id}</span>
+              <span className={`status-pill ${o.status}`}>{statusLabel(o.status)}</span>
+              <span>
+                {o.pallets} plt{o.bay ? ` · Bay ${o.bay}` : ''} · {o.department}
+              </span>
+              <span className="muted">
+                {collectionDateLabel(o.collectionDate, now) ?? 'No collection date'}
+              </span>
+              <span className="muted">
+                Ready {o.readyBy} · {formatTime(o.readyAt)}
+              </span>
+              {o.arrivedBy && (
+                <span className="muted">
+                  Arrived {o.arrivedBy} · {formatTime(o.arrivedAt)}
+                  {o.door ? ` · Door ${o.door}` : ''}
+                </span>
+              )}
+              {o.exceptionReason && <span className="muted">Exception: {o.exceptionReason}</span>}
+              {o.collectedBy ? (
+                <span>
+                  Collected {o.collectedBy} · {formatTime(o.collectedAt)}
+                </span>
+              ) : o.cancelledBy ? (
+                <span>
+                  Cancelled {o.cancelledBy} · {formatTime(o.cancelledAt)}
+                </span>
+              ) : null}
+            </div>
+          </article>
+        )}
         renderRow={(o) => (
           <tr key={o.id}>
             <td className="mono">{o.id}</td>
