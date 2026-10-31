@@ -1,5 +1,5 @@
 {
-  "name": "warehouse-collections-functions",
+  "name": "collecto-functions",
   "private": true,
   "main": "lib/functions/src/index.js",
   "engines": {
