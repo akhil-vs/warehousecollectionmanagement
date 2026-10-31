@@ -7,7 +7,9 @@ export function useDepartments(): Department[] {
   const [departments, setDepartments] = useState<Department[]>([...DEFAULT_DEPARTMENTS]);
 
   useEffect(() => {
-    return subscribeDepartments(setDepartments);
+    return subscribeDepartments(setDepartments, (err) => {
+      console.error('[FreightFetch] departments listener failed:', err);
+    });
   }, []);
 
   return departments;
