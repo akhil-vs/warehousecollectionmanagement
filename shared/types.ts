@@ -68,7 +68,7 @@ export interface Lookup {
   responses?: Partial<Record<string, LookupResponse>>;
 }
 
-export type TabId = 'pallet-ready' | 'driver-collection' | 'history' | 'admin';
+export type TabId = 'pallet-ready' | 'driver-collection' | 'collected' | 'admin';
 
 export interface AppSettings {
   departments: Department[];

@@ -42,12 +42,13 @@ import {
   IconTruck,
   IconWarehouse,
 } from './components/Icons';
+import { canAccessCollectedList } from './lib/access';
 import './App.css';
 
-function TabIcon({ icon }: { icon: 'pallet' | 'truck' | 'history' | 'admin' }) {
+function TabIcon({ icon }: { icon: 'pallet' | 'truck' | 'collected' | 'admin' }) {
   if (icon === 'pallet') return <IconPallet />;
   if (icon === 'truck') return <IconTruck />;
-  if (icon === 'history') return <IconHistory />;
+  if (icon === 'collected') return <IconHistory />;
   return <IconClipboard />;
 }
 
@@ -56,19 +57,19 @@ function defaultTab(role: DeviceRole): TabId {
   return 'pallet-ready';
 }
 
-function tabsFor(role: DeviceRole): { id: TabId; label: string; icon: 'pallet' | 'truck' | 'history' | 'admin' }[] {
+function tabsFor(role: DeviceRole): { id: TabId; label: string; icon: 'pallet' | 'truck' | 'collected' | 'admin' }[] {
   if (role === 'dock') return [];
   if (role === 'admin') {
     return [
       { id: 'pallet-ready', label: 'Pallet ready', icon: 'pallet' },
       { id: 'driver-collection', label: 'Driver collection', icon: 'truck' },
-      { id: 'history', label: 'History', icon: 'history' },
+      { id: 'collected', label: 'Collected', icon: 'collected' },
       { id: 'admin', label: 'Admin', icon: 'admin' },
     ];
   }
   return [
     { id: 'pallet-ready', label: 'Pallet ready', icon: 'pallet' },
-    { id: 'history', label: 'History', icon: 'history' },
+    { id: 'collected', label: 'Collected', icon: 'collected' },
   ];
 }
 
@@ -266,9 +267,7 @@ function AppShell() {
   const showReady =
     (isDepartmentRole(role, device.departments) && tab === 'pallet-ready') ||
     (role === 'admin' && tab === 'pallet-ready');
-  const showHistory =
-    (isDepartmentRole(role, device.departments) && tab === 'history') ||
-    (role === 'admin' && tab === 'history');
+  const showCollected = canAccessCollectedList(role) && tab === 'collected';
   const showAdmin = role === 'admin' && tab === 'admin';
 
   return (
@@ -450,7 +449,7 @@ function AppShell() {
               if (!requireOperator()) return;
               void confirm({
                 title: 'Cancel ready order',
-                message: `Cancel ready order ${order.id}? It stays in history.`,
+                message: `Cancel ready order ${order.id}? It stays on the Collected list.`,
                 confirmLabel: 'Cancel order',
                 danger: true,
               }).then((ok) => {
@@ -514,7 +513,7 @@ function AppShell() {
           />
         )}
 
-        {showHistory && (
+        {showCollected && (
           <HistoryPanel role={role} departments={device.departments} orders={data.orders} events={data.events} />
         )}
 
