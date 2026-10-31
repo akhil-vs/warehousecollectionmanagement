@@ -15,7 +15,7 @@ Live warehouse dock app: departments mark pallets ready, the dock alerts the own
 | Driver collection | No | Yes | Yes |
 | Confirm handover | Yes (after Acknowledge) | No | Exception only, with a reason + PIN |
 | Undo driver collection | No | Yes | Yes |
-| History | Own dept | Hidden | Full |
+| Collected list | Own dept | Hidden | Full (all departments) |
 
 Device role is chosen once with the admin PIN and stored in `localStorage` on that computer. Reassigning any PC (department, admin, or dock / gate) requires the PIN again. Operator names must be confirmed every 8 hours.
 
@@ -88,14 +88,14 @@ Without a usable Firebase web config the SPA shows **Demo mode** (in-browser onl
 5. Confirm handover is blocked until Acknowledge. From Admin, test **Exception handover** with a reason + PIN (department PC down).
 6. From Dock, undo a mistaken Driver collection, then collect again.
 7. Test a dock search with no match → **Send to all departments** → department **It is ours** / **Not ours** (answers are shared).
-8. Cancel a ready order from the department list (stays in History). Delete leftover test orders from the Admin tab (PIN required).
+8. Cancel a ready order from the department list (stays on Collected). Delete leftover test orders from the Admin tab (PIN required).
 
 ## Limits
 
 - Device roles are still client-side UX; the PIN gates admin mutations on the server, but anyone with the URL + PIN can reassign a machine’s role.
 - Operator names are typed and must be reconfirmed every 8 hours (and whenever the name changes).
 - Browser sound may stay silent on locked tablets until the page is tapped.
-- Collected orders stay in history; the dock only hides them from its ready list.
+- Collected orders stay on the Collected list (admin + all department PCs); the dock only hides them from its ready list.
 
 ## Scripts
 

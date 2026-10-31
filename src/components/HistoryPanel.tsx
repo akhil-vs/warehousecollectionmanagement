@@ -22,7 +22,7 @@ interface OrderActivityGroup {
 export function HistoryPanel({ role, departments, orders, events }: Props) {
   const now = useNow();
   const [q, setQ] = useState('');
-  const [status, setStatus] = useState<'all' | OrderStatus>('all');
+  const [status, setStatus] = useState<'all' | OrderStatus>('collected');
 
   const scopedOrders = useMemo(() => {
     let list = [...orders].sort(
@@ -30,7 +30,9 @@ export function HistoryPanel({ role, departments, orders, events }: Props) {
         (b.collectedAt || b.cancelledAt || b.arrivedAt || b.readyAt) -
         (a.collectedAt || a.cancelledAt || a.arrivedAt || a.readyAt),
     );
-    if (isDepartmentRole(role, departments)) {
+    // Admin and every department role can open this list. Department PCs stay
+    // scoped to their own orders; admin sees the full warehouse collected list.
+    if (role !== 'admin' && role !== 'dock') {
       list = list.filter((o) => o.department === role);
     }
     if (status !== 'all') list = list.filter((o) => o.status === status);
@@ -47,14 +49,14 @@ export function HistoryPanel({ role, departments, orders, events }: Props) {
       );
     }
     return list;
-  }, [orders, role, departments, q, status]);
+  }, [orders, role, q, status]);
 
   const scopedEvents = useMemo(() => {
-    if (isDepartmentRole(role, departments)) {
+    if (role !== 'admin' && role !== 'dock') {
       return events.filter((e) => e.department === role);
     }
     return events;
-  }, [events, role, departments]);
+  }, [events, role]);
 
   const activityByOrder = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -96,9 +98,15 @@ export function HistoryPanel({ role, departments, orders, events }: Props) {
       <div className="panel-head">
         <div className="panel-title">
           <IconHistory />
-          <h2>History</h2>
+          <h2>Collected</h2>
         </div>
-        <p>Order history and activity for your scope.</p>
+        <p>
+          {role === 'admin'
+            ? 'Collected and past orders across all departments.'
+            : isDepartmentRole(role, departments)
+              ? `Collected and past orders for ${role}.`
+              : 'Collected and past orders for your department.'}
+        </p>
       </div>
 
       <div className="history-filters">
