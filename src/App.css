@@ -742,6 +742,103 @@
   }
 }
 
+.dock-ready-cards {
+  display: none;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.dock-card {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.9rem 1rem;
+  border-left: 4px solid var(--accent);
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.dock-card.stale {
+  border-left-color: #8a5a12;
+  outline: 1px solid #e0c35a;
+}
+
+.dock-card-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.setup-checklist,
+.shift-checklist {
+  margin: 0.75rem 0 0;
+  padding-left: 1.2rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.shift-checklist .done {
+  color: #2f6b3a;
+}
+
+.shift-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(28, 25, 20, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.confirm-dialog {
+  width: min(28rem, 100%);
+  background: #fffaf3;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  padding: 1.25rem 1.35rem;
+}
+
+.confirm-dialog h2 {
+  margin: 0 0 0.5rem;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.confirm-dialog p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 1.1rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-banner,
+  .btn.warn-soft {
+    animation: none;
+  }
+}
+
 @media (max-width: 720px) {
   .app-header,
   .main,
@@ -755,6 +852,14 @@
   .shift-banner {
     margin-left: 1rem;
     margin-right: 1rem;
+  }
+
+  .dock-ready-cards {
+    display: flex;
+  }
+
+  .dock-ready-tables {
+    display: none;
   }
 
   .event-list li {

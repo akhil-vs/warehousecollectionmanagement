@@ -1,16 +1,16 @@
 import { useState } from 'react';
-import type { DeviceRole } from '../types';
-import { DEPARTMENTS } from '../types';
+import type { Department, DeviceRole } from '../types';
 
 interface Props {
   pinConfigured: boolean | null;
+  departments: Department[];
   busy: boolean;
   error: string | null;
   onAssign: (role: DeviceRole, pin: string) => Promise<boolean>;
 }
 
-export function RoleSetup({ pinConfigured, busy, error, onAssign }: Props) {
-  const [role, setRole] = useState<DeviceRole>('B2B');
+export function RoleSetup({ pinConfigured, departments, busy, error, onAssign }: Props) {
+  const [role, setRole] = useState<DeviceRole>(departments[0] ?? 'admin');
   const [pin, setPin] = useState('');
 
   return (
@@ -24,12 +24,18 @@ export function RoleSetup({ pinConfigured, busy, error, onAssign }: Props) {
             : 'First open: choose Admin, set a PIN, and keep that PIN with managers.'}
         </p>
 
+        <ol className="setup-checklist">
+          <li>Assign Admin first and store the PIN with managers.</li>
+          <li>Assign each department PC and the dock / gate PC.</li>
+          <li>After assign: type your name → Confirm shift → unlock sound → Enable alerts.</li>
+        </ol>
+
         <label className="field">
           <span>Role</span>
           <select value={role} onChange={(e) => setRole(e.target.value as DeviceRole)}>
             <option value="admin">Admin</option>
             <option value="dock">Dock / Gate</option>
-            {DEPARTMENTS.map((d) => (
+            {departments.map((d) => (
               <option key={d} value={d}>
                 Department — {d}
               </option>

@@ -1,61 +1,118 @@
-import { useMemo, useState } from 'react';
-import type { Order } from '../types';
-import { DEPARTMENTS } from '../types';
-import { formatDwell, formatTime, startOfLocalDay, statusLabel } from '../lib/format';
+import { useEffect, useMemo, useState } from 'react';
+import type { Department, Order } from '../types';
+import {
+  formatDwell,
+  formatTime,
+  isCollectionOverdue,
+  startOfLocalDay,
+  statusLabel,
+} from '../lib/format';
+import { STALE_WAIT_MS } from '../lib/orderState';
 import { useNow } from '../hooks/useNow';
 import { CollectionDateTables } from './CollectionDateTables';
+import { useConfirm } from './ConfirmDialog';
 
 interface Props {
   orders: Order[];
+  departments: Department[];
   openLookupCount: number;
   busy: boolean;
-  onReopen: (orderId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
-  onDelete: (orderId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  onReopen: (
+    orderId: string,
+    pin: string,
+  ) => Promise<{ ok: true } | { ok: false; error: string }>;
+  onDelete: (
+    orderId: string,
+    pin: string,
+  ) => Promise<{ ok: true } | { ok: false; error: string }>;
   onExceptionHandover: (
     orderId: string,
     reason: string,
+    pin: string,
   ) => Promise<{ ok: true } | { ok: false; error: string }>;
   onChangePin: (current: string, next: string) => Promise<boolean>;
+  onSetDepartments: (
+    departments: string[],
+    pin: string,
+  ) => Promise<{ ok: true; departments: Department[] } | { ok: false; error: string }>;
+}
+
+function averageMinutes(values: number[]): number | null {
+  if (values.length === 0) return null;
+  return Math.round(values.reduce((a, b) => a + b, 0) / values.length);
 }
 
 export function AdminPanel({
   orders,
+  departments,
   openLookupCount,
   busy,
   onReopen,
   onDelete,
   onExceptionHandover,
   onChangePin,
+  onSetDepartments,
 }: Props) {
   const now = useNow();
+  const confirm = useConfirm();
   const dayStart = startOfLocalDay(now);
   const [orderId, setOrderId] = useState('');
   const [exceptionReason, setExceptionReason] = useState('');
+  const [adminPin, setAdminPin] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [currentPin, setCurrentPin] = useState('');
   const [nextPin, setNextPin] = useState('');
+  const [deptDraft, setDeptDraft] = useState(departments.join(', '));
+
+  useEffect(() => {
+    setDeptDraft(departments.join(', '));
+  }, [departments]);
 
   const waiting = useMemo(
-    () => orders.filter((o) => o.status === 'arrived').sort((a, b) => (a.arrivedAt ?? 0) - (b.arrivedAt ?? 0)),
+    () =>
+      orders
+        .filter((o) => o.status === 'arrived')
+        .sort((a, b) => (a.arrivedAt ?? 0) - (b.arrivedAt ?? 0)),
     [orders],
   );
   const unacked = waiting.filter((o) => !o.ackBy);
   const oldestWaiting = waiting[0];
   const collectedToday = orders.filter(
     (o) => o.status === 'collected' && (o.collectedAt ?? 0) >= dayStart,
-  ).length;
+  );
   const cancelledToday = orders.filter(
     (o) => o.status === 'cancelled' && (o.cancelledAt ?? 0) >= dayStart,
   ).length;
-  const readyNow = orders.filter((o) => o.status === 'ready').length;
+  const readyNow = orders.filter((o) => o.status === 'ready');
+  const overdueReady = readyNow.filter((o) => isCollectionOverdue(o.collectionDate, now));
   const liveByDate = useMemo(
     () => orders.filter((o) => o.status === 'ready' || o.status === 'arrived'),
     [orders],
   );
 
+  const waitReport = useMemo(() => {
+    const openWaits = waiting
+      .map((o) => (o.arrivedAt ? now - o.arrivedAt : 0))
+      .filter((ms) => ms > 0);
+    const completedWaits = collectedToday
+      .map((o) => {
+        if (!o.arrivedAt || !o.collectedAt) return null;
+        return o.collectedAt - o.arrivedAt;
+      })
+      .filter((ms): ms is number => ms != null && ms >= 0);
+    const staleOpen = waiting.filter((o) => (o.arrivedAt ?? 0) > 0 && now - (o.arrivedAt ?? 0) >= STALE_WAIT_MS);
+    return {
+      avgOpenMin: averageMinutes(openWaits.map((ms) => ms / 60_000)),
+      avgCompletedMin: averageMinutes(completedWaits.map((ms) => ms / 60_000)),
+      staleOpen: staleOpen.length,
+      overdueReady: overdueReady.length,
+      longestOpen: oldestWaiting,
+    };
+  }, [waiting, collectedToday, now, overdueReady.length, oldestWaiting]);
+
   const overview = useMemo(() => {
-    return DEPARTMENTS.map((dept) => {
+    return departments.map((dept) => {
       const mine = orders.filter((o) => o.department === dept);
       return {
         dept,
@@ -66,12 +123,16 @@ export function AdminPanel({
         ).length,
       };
     });
-  }, [orders, dayStart]);
+  }, [orders, dayStart, departments]);
 
   async function reopen() {
     setMsg(null);
     setErr(null);
-    const r = await onReopen(orderId);
+    if (!adminPin.trim()) {
+      setErr('Enter admin PIN for corrections.');
+      return;
+    }
+    const r = await onReopen(orderId, adminPin);
     if (!r.ok) setErr(r.error);
     else {
       setMsg(`Reopened ${orderId.trim().toUpperCase()} as ready.`);
@@ -82,8 +143,18 @@ export function AdminPanel({
   async function remove() {
     setMsg(null);
     setErr(null);
-    if (!window.confirm(`Permanently delete order ${orderId.trim().toUpperCase()}?`)) return;
-    const r = await onDelete(orderId);
+    if (!adminPin.trim()) {
+      setErr('Enter admin PIN for corrections.');
+      return;
+    }
+    const ok = await confirm({
+      title: 'Delete order',
+      message: `Permanently delete order ${orderId.trim().toUpperCase()}?`,
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!ok) return;
+    const r = await onDelete(orderId, adminPin);
     if (!r.ok) setErr(r.error);
     else {
       setMsg(`Deleted ${orderId.trim().toUpperCase()}.`);
@@ -94,7 +165,11 @@ export function AdminPanel({
   async function exceptionCollect() {
     setMsg(null);
     setErr(null);
-    const r = await onExceptionHandover(orderId, exceptionReason);
+    if (!adminPin.trim()) {
+      setErr('Enter admin PIN for corrections.');
+      return;
+    }
+    const r = await onExceptionHandover(orderId, exceptionReason, adminPin);
     if (!r.ok) setErr(r.error);
     else {
       setMsg(`Exception handover recorded for ${orderId.trim().toUpperCase()}.`);
@@ -114,24 +189,43 @@ export function AdminPanel({
     }
   }
 
+  async function saveDepartments() {
+    setMsg(null);
+    setErr(null);
+    if (!adminPin.trim()) {
+      setErr('Enter admin PIN to change departments.');
+      return;
+    }
+    const list = deptDraft
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const r = await onSetDepartments(list, adminPin);
+    if (!r.ok) setErr(r.error);
+    else {
+      setMsg(`Departments updated: ${r.departments.join(', ')}`);
+      setDeptDraft(r.departments.join(', '));
+    }
+  }
+
   return (
     <section className="panel">
       <div className="panel-head">
         <h2>Admin</h2>
-        <p>Today’s board, corrections, and PIN.</p>
+        <p>Today’s board, wait-time report, corrections, departments, and PIN.</p>
       </div>
 
       <div className="overview-grid shift-kpis">
         <div className="overview-item">
           <h3>Today</h3>
           <p>
-            <strong>{collectedToday}</strong> collected
+            <strong>{collectedToday.length}</strong> collected
           </p>
           <p>
             <strong>{cancelledToday}</strong> cancelled
           </p>
           <p>
-            <strong>{readyNow}</strong> still ready
+            <strong>{readyNow.length}</strong> still ready
           </p>
         </div>
         <div className="overview-item">
@@ -147,20 +241,32 @@ export function AdminPanel({
           </p>
         </div>
         <div className="overview-item">
-          <h3>Oldest wait</h3>
-          {oldestWaiting ? (
-            <>
-              <p>
-                <strong className="mono">{oldestWaiting.id}</strong>
-              </p>
-              <p>{oldestWaiting.department}</p>
-              <p>
-                waiting {formatDwell(oldestWaiting.arrivedAt, now)} ·{' '}
-                {formatTime(oldestWaiting.arrivedAt)}
-              </p>
-            </>
+          <h3>Wait-time report</h3>
+          <p>
+            Avg open wait:{' '}
+            <strong>
+              {waitReport.avgOpenMin == null ? '—' : `${waitReport.avgOpenMin} min`}
+            </strong>
+          </p>
+          <p>
+            Avg completed today:{' '}
+            <strong>
+              {waitReport.avgCompletedMin == null
+                ? '—'
+                : `${waitReport.avgCompletedMin} min`}
+            </strong>
+          </p>
+          <p>
+            <strong>{waitReport.staleOpen}</strong> stale (&gt;15 min) ·{' '}
+            <strong>{waitReport.overdueReady}</strong> overdue ready
+          </p>
+          {waitReport.longestOpen ? (
+            <p className="muted">
+              Longest: <span className="mono">{waitReport.longestOpen.id}</span> ·{' '}
+              {formatDwell(waitReport.longestOpen.arrivedAt, now)}
+            </p>
           ) : (
-            <p>None waiting.</p>
+            <p className="muted">No drivers waiting.</p>
           )}
         </div>
       </div>
@@ -181,6 +287,33 @@ export function AdminPanel({
           </div>
         ))}
       </div>
+
+      {waiting.length > 0 && (
+        <div className="list-block">
+          <h3>Drivers waiting (oldest first)</h3>
+          <ul className="order-list">
+            {waiting.map((order) => (
+              <li
+                key={order.id}
+                className={
+                  now - (order.arrivedAt ?? 0) >= STALE_WAIT_MS ? 'arrived stale' : 'arrived'
+                }
+              >
+                <div className="order-main">
+                  <span className="mono order-id">{order.id}</span>
+                  <span>
+                    {order.department}
+                    {order.ackBy ? ` · Ack ${order.ackBy}` : ' · Not acknowledged'}
+                  </span>
+                  <span className="muted">
+                    waiting {formatDwell(order.arrivedAt, now)} · {formatTime(order.arrivedAt)}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <CollectionDateTables
         orders={liveByDate}
@@ -232,6 +365,15 @@ export function AdminPanel({
             placeholder="Required for exception handover"
           />
         </label>
+        <label className="field">
+          <span>Admin PIN (required for reopen / delete)</span>
+          <input
+            type="password"
+            value={adminPin}
+            onChange={(e) => setAdminPin(e.target.value)}
+            autoComplete="off"
+          />
+        </label>
         <div className="row-actions">
           <button type="button" className="btn primary" disabled={busy} onClick={() => void reopen()}>
             Reopen as ready
@@ -248,6 +390,18 @@ export function AdminPanel({
             Delete order
           </button>
         </div>
+      </div>
+
+      <div className="admin-block">
+        <h3>Departments</h3>
+        <p className="muted">Comma-separated list. Changing names may force department PCs to reassign.</p>
+        <label className="field">
+          <span>Department names</span>
+          <input value={deptDraft} onChange={(e) => setDeptDraft(e.target.value)} />
+        </label>
+        <button type="button" className="btn solid" disabled={busy} onClick={() => void saveDepartments()}>
+          Save departments
+        </button>
       </div>
 
       <div className="admin-block">

@@ -12,6 +12,8 @@ import type {
   EventType,
   LookupResponse,
 } from '../types';
+import { DEFAULT_DEPARTMENTS } from '../types';
+import { normalizeDepartments } from './orderState';
 
 type Listener = () => void;
 
@@ -19,6 +21,7 @@ let orders = new Map<string, Order>();
 let events: AppEvent[] = [];
 let lookups: Lookup[] = [];
 let pinHash: string | null = null;
+let departments: Department[] = [...DEFAULT_DEPARTMENTS];
 const listeners = new Set<Listener>();
 
 function emit() {
@@ -48,6 +51,15 @@ export function demoGetPinHash(): string | null {
 
 export function demoSetPinHash(hash: string): void {
   pinHash = hash;
+  emit();
+}
+
+export function demoGetDepartments(): Department[] {
+  return [...departments];
+}
+
+export function demoSetDepartments(next: Department[]): void {
+  departments = normalizeDepartments(next);
   emit();
 }
 

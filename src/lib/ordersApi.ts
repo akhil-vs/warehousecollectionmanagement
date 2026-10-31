@@ -1,29 +1,24 @@
 import {
   collection,
   doc,
-  deleteField,
-  deleteDoc,
   getDoc,
   onSnapshot,
-  setDoc,
-  updateDoc,
-  addDoc,
   query,
   orderBy,
-  runTransaction,
   type Unsubscribe,
 } from 'firebase/firestore';
 import type {
   AppEvent,
   Department,
-  EventType,
   Lookup,
   LookupResponse,
   LookupStatus,
   Order,
 } from '../types';
+import { DEFAULT_DEPARTMENTS } from '../types';
 import { getDb, isFirebaseConfigured } from './firebase';
 import { parseDateInput } from './format';
+import { callMutation, callTyped } from './callables';
 import {
   demoCloseLookupsForOrder,
   demoDeleteOrder,
@@ -31,19 +26,25 @@ import {
   demoGetLookups,
   demoGetOrders,
   demoGetPinHash,
+  demoGetDepartments,
   demoLogEvent,
   demoAddLookup,
   demoSetPinHash,
+  demoSetDepartments,
   demoUpdateLookup,
   demoUpsertOrder,
   subscribeDemo,
 } from './demoStore';
 import {
-  UserFacingError,
   markReadyConflict,
+  normalizeDepartments,
+  isKnownDepartment,
+  resolvePalletCount,
+  readyEditNote,
   toUserError,
   withLookupResponse,
 } from './orderState';
+import { hashPin, verifyPin } from './pin';
 
 function ordersCol() {
   return collection(getDb(), 'orders');
@@ -57,17 +58,13 @@ function lookupsCol() {
   return collection(getDb(), 'lookups');
 }
 
-function adminDoc() {
-  return doc(getDb(), 'config', 'admin');
-}
-
 function mapOrder(id: string, data: Record<string, unknown>): Order {
   return {
     id,
     status: data.status as Order['status'],
     pallets: Number(data.pallets),
     bay: (data.bay as string | undefined) || undefined,
-    department: data.department as Department,
+    department: String(data.department),
     collectionDate: parseDateInput(
       typeof data.collectionDate === 'string' ? data.collectionDate : undefined,
     ),
@@ -97,21 +94,13 @@ function mapLookup(id: string, data: Record<string, unknown>): Lookup {
   };
 }
 
-async function logEventFb(
-  type: EventType,
-  orderId: string,
-  operator: string,
-  department?: Department | string,
-  note?: string,
-): Promise<void> {
-  await addDoc(eventsCol(), {
-    type,
-    orderId,
-    operator,
-    department: department ?? null,
-    at: Date.now(),
-    note: note ?? null,
-  });
+function resolveCollectionDate(
+  value: string | undefined,
+): { ok: true; date?: string } | { ok: false; error: string } {
+  if (!value || !value.trim()) return { ok: true };
+  const parsed = parseDateInput(value);
+  if (!parsed) return { ok: false, error: 'Enter a valid collection date.' };
+  return { ok: true, date: parsed };
 }
 
 export function subscribeOrders(cb: (orders: Order[]) => void): Unsubscribe {
@@ -139,7 +128,7 @@ export function subscribeEvents(cb: (events: AppEvent[]) => void): Unsubscribe {
         const data = d.data();
         return {
           id: d.id,
-          type: data.type as EventType,
+          type: data.type as AppEvent['type'],
           orderId: String(data.orderId),
           department: data.department ?? undefined,
           operator: String(data.operator),
@@ -163,40 +152,105 @@ export function subscribeLookups(cb: (lookups: Lookup[]) => void): Unsubscribe {
   });
 }
 
+export function subscribeDepartments(cb: (departments: Department[]) => void): Unsubscribe {
+  if (!isFirebaseConfigured()) {
+    const push = () => cb(demoGetDepartments());
+    push();
+    return subscribeDemo(push);
+  }
+  return onSnapshot(doc(getDb(), 'config', 'settings'), (snap) => {
+    if (!snap.exists()) {
+      cb([...DEFAULT_DEPARTMENTS]);
+      return;
+    }
+    cb(normalizeDepartments(snap.data().departments));
+  });
+}
+
+export async function getBootstrapState(): Promise<{
+  pinConfigured: boolean;
+  departments: Department[];
+}> {
+  if (!isFirebaseConfigured()) {
+    return {
+      pinConfigured: Boolean(demoGetPinHash()),
+      departments: demoGetDepartments(),
+    };
+  }
+  return callTyped('getBootstrapState', {});
+}
+
+export async function bootstrapAdminPin(
+  pin: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isFirebaseConfigured()) {
+    if (pin.trim().length < 4) {
+      return { ok: false, error: 'Choose an admin PIN with at least 4 characters.' };
+    }
+    if (demoGetPinHash()) return { ok: false, error: 'Admin PIN is already configured.' };
+    demoSetPinHash(await hashPin(pin.trim()));
+    return { ok: true };
+  }
+  return callMutation('bootstrapAdminPin', { pin });
+}
+
+export async function verifyAdminPin(
+  pin: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isFirebaseConfigured()) {
+    const existing = demoGetPinHash();
+    if (!existing) return { ok: false, error: 'No admin PIN is set yet.' };
+    const ok = await verifyPin(pin.trim(), existing);
+    return ok ? { ok: true } : { ok: false, error: 'Incorrect admin PIN.' };
+  }
+  return callMutation('verifyAdminPin', { pin });
+}
+
+export async function changeAdminPin(
+  currentPin: string,
+  nextPin: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isFirebaseConfigured()) {
+    const existing = demoGetPinHash();
+    if (!existing) return { ok: false, error: 'No admin PIN is set yet.' };
+    if (!(await verifyPin(currentPin.trim(), existing))) {
+      return { ok: false, error: 'Current PIN is incorrect.' };
+    }
+    if (nextPin.trim().length < 4) {
+      return { ok: false, error: 'New PIN must be at least 4 characters.' };
+    }
+    demoSetPinHash(await hashPin(nextPin.trim()));
+    return { ok: true };
+  }
+  return callMutation('changeAdminPin', { currentPin, nextPin });
+}
+
+export async function setDepartments(
+  departments: string[],
+  pin: string,
+): Promise<{ ok: true; departments: Department[] } | { ok: false; error: string }> {
+  const next = normalizeDepartments(departments);
+  if (!isFirebaseConfigured()) {
+    const existing = demoGetPinHash();
+    if (!existing) return { ok: false, error: 'No admin PIN is set yet.' };
+    if (!(await verifyPin(pin.trim(), existing))) {
+      return { ok: false, error: 'Incorrect admin PIN.' };
+    }
+    demoSetDepartments(next);
+    return { ok: true, departments: next };
+  }
+  try {
+    return await callTyped('setDepartments', { departments: next, pin });
+  } catch (err) {
+    return { ok: false, error: toUserError(err, 'Could not update departments.') };
+  }
+}
+
+/** @deprecated Prefer getBootstrapState — kept for transitional call sites. */
 export async function getAdminPinHash(): Promise<string | null> {
   if (!isFirebaseConfigured()) return demoGetPinHash();
-  const snap = await getDoc(adminDoc());
-  if (!snap.exists()) return null;
-  return (snap.data().pinHash as string) || null;
-}
-
-export async function setAdminPinHash(pinHash: string): Promise<void> {
-  if (!isFirebaseConfigured()) {
-    demoSetPinHash(pinHash);
-    return;
-  }
-  await setDoc(adminDoc(), { pinHash }, { merge: true });
-}
-
-function resolvePalletCount(pallets: number | undefined): number {
-  if (!Number.isFinite(pallets) || pallets === undefined || pallets < 1) return 1;
-  return Math.floor(pallets);
-}
-
-function resolveCollectionDate(
-  value: string | undefined,
-): { ok: true; date?: string } | { ok: false; error: string } {
-  if (!value || !value.trim()) return { ok: true };
-  const parsed = parseDateInput(value);
-  if (!parsed) return { ok: false, error: 'Enter a valid collection date.' };
-  return { ok: true, date: parsed };
-}
-
-function readyEditNote(pallets: number, bay?: string, collectionDate?: string): string {
-  const parts = [`${pallets} plt`];
-  if (bay) parts.push(`Bay ${bay}`);
-  if (collectionDate) parts.push(`collect ${collectionDate}`);
-  return parts.join(' · ');
+  const state = await getBootstrapState();
+  return state.pinConfigured ? 'configured' : null;
 }
 
 export async function markOrderReady(input: {
@@ -210,52 +264,41 @@ export async function markOrderReady(input: {
   const id = input.orderId.trim().toUpperCase();
   if (!id) return { ok: false, error: 'Enter an order ID.' };
   if (!input.operator.trim()) return { ok: false, error: 'Enter your name at the top.' };
-  const pallets = resolvePalletCount(input.pallets);
   const collection = resolveCollectionDate(input.collectionDate);
   if (!collection.ok) return collection;
 
-  const payload = {
-    status: 'ready' as const,
-    pallets,
-    bay: input.bay?.trim() || undefined,
-    collectionDate: collection.date,
-    department: input.department,
-    readyBy: input.operator.trim(),
-    readyAt: Date.now(),
-  };
-
   if (!isFirebaseConfigured()) {
+    const departments = demoGetDepartments();
+    if (!isKnownDepartment(input.department, departments)) {
+      return { ok: false, error: 'Unknown department.' };
+    }
+    const pallets = resolvePalletCount(input.pallets);
     const existing = demoGetOrders().find((o) => o.id === id);
     const conflict = markReadyConflict(existing, input.department);
     if (conflict) return { ok: false, error: conflict };
-    demoUpsertOrder({ id, ...payload });
+    demoUpsertOrder({
+      id,
+      status: 'ready',
+      pallets,
+      bay: input.bay?.trim() || undefined,
+      collectionDate: collection.date,
+      department: input.department,
+      readyBy: input.operator.trim(),
+      readyAt: Date.now(),
+    });
     demoLogEvent('ready', id, input.operator.trim(), input.department);
     demoCloseLookupsForOrder(id, 'found');
     return { ok: true };
   }
 
-  try {
-    await runTransaction(getDb(), async (tx) => {
-      const ref = doc(ordersCol(), id);
-      const snap = await tx.get(ref);
-      const existing = snap.exists() ? mapOrder(snap.id, snap.data()) : undefined;
-      const conflict = markReadyConflict(existing, input.department);
-      if (conflict) throw new UserFacingError(conflict);
-      tx.set(ref, {
-        status: payload.status,
-        pallets: payload.pallets,
-        bay: payload.bay || null,
-        collectionDate: payload.collectionDate || null,
-        department: payload.department,
-        readyBy: payload.readyBy,
-        readyAt: payload.readyAt,
-      });
-    });
-    await logEventFb('ready', id, input.operator.trim(), input.department);
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: toUserError(err, 'Could not mark ready.') };
-  }
+  return callMutation('markOrderReady', {
+    orderId: id,
+    pallets: input.pallets,
+    bay: input.bay,
+    collectionDate: input.collectionDate,
+    department: input.department,
+    operator: input.operator,
+  });
 }
 
 export async function updateReadyOrder(
@@ -271,7 +314,6 @@ export async function updateReadyOrder(
   const collection = resolveCollectionDate(patch.collectionDate);
   if (!collection.ok) return collection;
   const bay = patch.bay?.trim() || undefined;
-  const note = readyEditNote(pallets, bay, collection.date);
 
   if (!isFirebaseConfigured()) {
     const existing = demoGetOrders().find((o) => o.id === order.id);
@@ -279,6 +321,7 @@ export async function updateReadyOrder(
     if (existing.status !== 'ready') {
       return { ok: false, error: 'Only ready orders can be edited.' };
     }
+    const note = readyEditNote(pallets, bay, collection.date);
     demoUpsertOrder({
       ...existing,
       pallets,
@@ -289,26 +332,13 @@ export async function updateReadyOrder(
     return { ok: true };
   }
 
-  try {
-    await runTransaction(getDb(), async (tx) => {
-      const ref = doc(ordersCol(), order.id);
-      const snap = await tx.get(ref);
-      if (!snap.exists()) throw new UserFacingError('Order not found.');
-      const existing = mapOrder(snap.id, snap.data());
-      if (existing.status !== 'ready') {
-        throw new UserFacingError('Only ready orders can be edited.');
-      }
-      tx.update(ref, {
-        pallets,
-        bay: bay || deleteField(),
-        collectionDate: collection.date || deleteField(),
-      });
-    });
-    await logEventFb('updated', order.id, operator.trim(), order.department, note);
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: toUserError(err, 'Could not update order.') };
-  }
+  return callMutation('updateReadyOrder', {
+    orderId: order.id,
+    operator,
+    pallets,
+    bay,
+    collectionDate: patch.collectionDate,
+  });
 }
 
 export async function closeOpenLookupsForOrder(
@@ -316,6 +346,10 @@ export async function closeOpenLookupsForOrder(
   openLookups: Lookup[],
   operator: string,
 ): Promise<void> {
+  if (isFirebaseConfigured()) {
+    // Server markOrderReady already closes open lookups.
+    return;
+  }
   const targets = openLookups.filter(
     (l) => l.orderId.toUpperCase() === orderId.toUpperCase() && l.status === 'open',
   );
@@ -352,30 +386,12 @@ export async function driverCollection(
     return { ok: true };
   }
 
-  try {
-    await runTransaction(getDb(), async (tx) => {
-      const ref = doc(ordersCol(), order.id);
-      const snap = await tx.get(ref);
-      if (!snap.exists()) throw new UserFacingError('Order not found.');
-      const existing = mapOrder(snap.id, snap.data());
-      if (existing.status !== 'ready') {
-        throw new UserFacingError('Order is not ready for collection.');
-      }
-      tx.update(ref, {
-        status: 'arrived',
-        arrivedBy: operator.trim(),
-        arrivedAt: Date.now(),
-        ackBy: deleteField(),
-        door: door || deleteField(),
-        haulier: haulier || deleteField(),
-        exceptionReason: deleteField(),
-      });
-    });
-    await logEventFb('driver_collection', order.id, operator.trim(), order.department);
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: toUserError(err, 'Could not record driver collection.') };
-  }
+  return callMutation('driverCollection', {
+    orderId: order.id,
+    operator,
+    door,
+    haulier,
+  });
 }
 
 export async function undoDriverCollection(
@@ -401,34 +417,7 @@ export async function undoDriverCollection(
     return { ok: true };
   }
 
-  try {
-    await runTransaction(getDb(), async (tx) => {
-      const ref = doc(ordersCol(), order.id);
-      const snap = await tx.get(ref);
-      if (!snap.exists()) throw new UserFacingError('Order not found.');
-      const existing = mapOrder(snap.id, snap.data());
-      if (existing.status !== 'arrived') {
-        throw new UserFacingError('Order is not awaiting handover.');
-      }
-      tx.update(ref, {
-        status: 'ready',
-        arrivedBy: deleteField(),
-        arrivedAt: deleteField(),
-        ackBy: deleteField(),
-        door: deleteField(),
-        haulier: deleteField(),
-      });
-    });
-    await logEventFb(
-      'driver_collection_cancelled',
-      order.id,
-      operator.trim(),
-      order.department,
-    );
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: toUserError(err, 'Could not undo collection.') };
-  }
+  return callMutation('undoDriverCollection', { orderId: order.id, operator });
 }
 
 export async function acknowledgeOrder(
@@ -447,29 +436,7 @@ export async function acknowledgeOrder(
     return { ok: true };
   }
 
-  try {
-    let alreadyAcked = false;
-    await runTransaction(getDb(), async (tx) => {
-      const ref = doc(ordersCol(), order.id);
-      const snap = await tx.get(ref);
-      if (!snap.exists()) throw new UserFacingError('Order not found.');
-      const existing = mapOrder(snap.id, snap.data());
-      if (existing.status !== 'arrived') {
-        throw new UserFacingError('No driver waiting on this order.');
-      }
-      if (existing.ackBy) {
-        alreadyAcked = true;
-        return;
-      }
-      tx.update(ref, { ackBy: operator.trim() });
-    });
-    if (!alreadyAcked) {
-      await logEventFb('acknowledged', order.id, operator.trim(), order.department);
-    }
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: toUserError(err, 'Could not acknowledge.') };
-  }
+  return callMutation('acknowledgeOrder', { orderId: order.id, operator });
 }
 
 export async function confirmHandover(
@@ -495,41 +462,25 @@ export async function confirmHandover(
     return { ok: true };
   }
 
-  try {
-    await runTransaction(getDb(), async (tx) => {
-      const ref = doc(ordersCol(), order.id);
-      const snap = await tx.get(ref);
-      if (!snap.exists()) throw new UserFacingError('Order not found.');
-      const existing = mapOrder(snap.id, snap.data());
-      if (existing.status !== 'arrived') {
-        throw new UserFacingError('Order is not awaiting handover.');
-      }
-      if (!existing.ackBy) {
-        throw new UserFacingError('Acknowledge the driver first.');
-      }
-      tx.update(ref, {
-        status: 'collected',
-        collectedBy: operator.trim(),
-        collectedAt: Date.now(),
-      });
-    });
-    await logEventFb('collected', order.id, operator.trim(), order.department);
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: toUserError(err, 'Could not confirm handover.') };
-  }
+  return callMutation('confirmHandover', { orderId: order.id, operator });
 }
 
 export async function exceptionHandover(
   order: Order,
   operator: string,
   reason: string,
+  pin: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!operator.trim()) return { ok: false, error: 'Enter your name at the top.' };
   const note = reason.trim();
   if (!note) return { ok: false, error: 'Enter a reason for the exception handover.' };
 
   if (!isFirebaseConfigured()) {
+    const existing = demoGetPinHash();
+    if (!existing) return { ok: false, error: 'No admin PIN is set yet.' };
+    if (!(await verifyPin(pin.trim(), existing))) {
+      return { ok: false, error: 'Incorrect admin PIN.' };
+    }
     if (order.status !== 'arrived') {
       return { ok: false, error: 'Order is not awaiting handover.' };
     }
@@ -545,34 +496,12 @@ export async function exceptionHandover(
     return { ok: true };
   }
 
-  try {
-    await runTransaction(getDb(), async (tx) => {
-      const ref = doc(ordersCol(), order.id);
-      const snap = await tx.get(ref);
-      if (!snap.exists()) throw new UserFacingError('Order not found.');
-      const existing = mapOrder(snap.id, snap.data());
-      if (existing.status !== 'arrived') {
-        throw new UserFacingError('Order is not awaiting handover.');
-      }
-      tx.update(ref, {
-        status: 'collected',
-        collectedBy: operator.trim(),
-        collectedAt: Date.now(),
-        exceptionReason: note,
-      });
-    });
-    await logEventFb(
-      'handover_exception',
-      order.id,
-      operator.trim(),
-      order.department,
-      note,
-    );
-    await logEventFb('collected', order.id, operator.trim(), order.department, note);
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: toUserError(err, 'Could not complete exception handover.') };
-  }
+  return callMutation('exceptionHandover', {
+    orderId: order.id,
+    operator,
+    reason: note,
+    pin,
+  });
 }
 
 export async function cancelOrder(
@@ -595,44 +524,24 @@ export async function cancelOrder(
     return { ok: true };
   }
 
-  try {
-    await runTransaction(getDb(), async (tx) => {
-      const ref = doc(ordersCol(), order.id);
-      const snap = await tx.get(ref);
-      if (!snap.exists()) throw new UserFacingError('Order not found.');
-      const existing = mapOrder(snap.id, snap.data());
-      if (existing.status !== 'ready') {
-        throw new UserFacingError('Only ready orders can be cancelled.');
-      }
-      tx.update(ref, {
-        status: 'cancelled',
-        cancelledBy: operator.trim(),
-        cancelledAt: Date.now(),
-      });
-    });
-    await logEventFb('cancelled', order.id, operator.trim(), order.department);
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: toUserError(err, 'Could not cancel order.') };
-  }
-}
-
-export async function removeOrder(
-  order: Order,
-  operator: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  return cancelOrder(order, operator);
+  return callMutation('cancelOrder', { orderId: order.id, operator });
 }
 
 export async function reopenOrder(
   orderId: string,
   operator: string,
+  pin: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const id = orderId.trim().toUpperCase();
   if (!id) return { ok: false, error: 'Enter an order ID.' };
   if (!operator.trim()) return { ok: false, error: 'Enter your name at the top.' };
 
   if (!isFirebaseConfigured()) {
+    const existingPin = demoGetPinHash();
+    if (!existingPin) return { ok: false, error: 'No admin PIN is set yet.' };
+    if (!(await verifyPin(pin.trim(), existingPin))) {
+      return { ok: false, error: 'Incorrect admin PIN.' };
+    }
     const existing = demoGetOrders().find((o) => o.id === id);
     if (!existing) return { ok: false, error: 'Order not found.' };
     demoUpsertOrder({
@@ -649,44 +558,24 @@ export async function reopenOrder(
     return { ok: true };
   }
 
-  try {
-    let department: Department | string = '';
-    await runTransaction(getDb(), async (tx) => {
-      const ref = doc(ordersCol(), id);
-      const snap = await tx.get(ref);
-      if (!snap.exists()) throw new UserFacingError('Order not found.');
-      const existing = mapOrder(snap.id, snap.data());
-      department = existing.department;
-      tx.update(ref, {
-        status: 'ready',
-        arrivedBy: deleteField(),
-        arrivedAt: deleteField(),
-        ackBy: deleteField(),
-        collectedBy: deleteField(),
-        collectedAt: deleteField(),
-        door: deleteField(),
-        haulier: deleteField(),
-        exceptionReason: deleteField(),
-        cancelledBy: deleteField(),
-        cancelledAt: deleteField(),
-      });
-    });
-    await logEventFb('reopened', id, operator.trim(), department);
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: toUserError(err, 'Could not reopen order.') };
-  }
+  return callMutation('reopenOrder', { orderId: id, operator, pin });
 }
 
 export async function deleteOrderAdmin(
   orderId: string,
   operator: string,
+  pin: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const id = orderId.trim().toUpperCase();
   if (!id) return { ok: false, error: 'Enter an order ID.' };
   if (!operator.trim()) return { ok: false, error: 'Enter your name at the top.' };
 
   if (!isFirebaseConfigured()) {
+    const existingPin = demoGetPinHash();
+    if (!existingPin) return { ok: false, error: 'No admin PIN is set yet.' };
+    if (!(await verifyPin(pin.trim(), existingPin))) {
+      return { ok: false, error: 'Incorrect admin PIN.' };
+    }
     const existing = demoGetOrders().find((o) => o.id === id);
     if (!existing) return { ok: false, error: 'Order not found.' };
     demoDeleteOrder(id);
@@ -694,13 +583,7 @@ export async function deleteOrderAdmin(
     return { ok: true };
   }
 
-  const ref = doc(ordersCol(), id);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return { ok: false, error: 'Order not found.' };
-  const existing = mapOrder(snap.id, snap.data());
-  await deleteDoc(ref);
-  await logEventFb('removed', id, operator.trim(), existing.department);
-  return { ok: true };
+  return callMutation('deleteOrderAdmin', { orderId: id, operator, pin });
 }
 
 export async function sendLookup(
@@ -723,25 +606,11 @@ export async function sendLookup(
     return { ok: true, lookup };
   }
 
-  const ref = await addDoc(lookupsCol(), {
-    orderId: id,
-    sentBy: operator.trim(),
-    at: Date.now(),
-    status: 'open',
-    responses: {},
-  });
-  await logEventFb('lookup_sent', id, operator.trim());
-  return {
-    ok: true,
-    lookup: {
-      id: ref.id,
-      orderId: id,
-      sentBy: operator.trim(),
-      at: Date.now(),
-      status: 'open',
-      responses: {},
-    },
-  };
+  try {
+    return await callTyped('sendLookup', { orderId: id, operator });
+  } catch (err) {
+    return { ok: false, error: toUserError(err, 'Could not send lookup.') };
+  }
 }
 
 export async function updateLookupStatus(
@@ -760,12 +629,7 @@ export async function updateLookupStatus(
     return;
   }
 
-  await updateDoc(doc(lookupsCol(), lookupId), { status });
-  if (status === 'closed' && orderId) {
-    await logEventFb('lookup_closed', orderId, operator);
-  } else if (status === 'found' && orderId) {
-    await logEventFb('lookup_found', orderId, operator);
-  }
+  await callMutation('updateLookupStatus', { lookupId, status, operator, orderId });
 }
 
 export async function respondToLookup(
@@ -776,30 +640,33 @@ export async function respondToLookup(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!operator.trim()) return { ok: false, error: 'Enter your name at the top.' };
 
-  const next = withLookupResponse(lookup, department, response);
-  const eventType = response === 'ours' ? 'lookup_ours' : 'lookup_not_ours';
-
   if (!isFirebaseConfigured()) {
-    demoUpdateLookup(lookup.id, {
-      responses: next.responses,
-      status: next.status,
-    });
-    demoLogEvent(eventType, lookup.orderId, operator.trim(), department);
-    if (next.status === 'closed' && lookup.status === 'open') {
-      demoLogEvent('lookup_closed', lookup.orderId, operator.trim(), department);
+    try {
+      // Atomic-enough for single-tab demo: merge against latest store copy.
+      const latest = demoGetLookups().find((l) => l.id === lookup.id) ?? lookup;
+      const departments = demoGetDepartments();
+      const next = withLookupResponse(latest, department, response, departments);
+      const eventType = response === 'ours' ? 'lookup_ours' : 'lookup_not_ours';
+      demoUpdateLookup(lookup.id, {
+        responses: next.responses,
+        status: next.status,
+      });
+      demoLogEvent(eventType, lookup.orderId, operator.trim(), department);
+      if (next.status === 'closed' && latest.status === 'open') {
+        demoLogEvent('lookup_closed', lookup.orderId, operator.trim(), department);
+      }
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: toUserError(err, 'Could not respond.') };
     }
-    return { ok: true };
   }
 
-  await updateDoc(doc(lookupsCol(), lookup.id), {
-    responses: next.responses ?? {},
-    status: next.status,
+  return callMutation('respondToLookup', {
+    lookupId: lookup.id,
+    department,
+    response,
+    operator,
   });
-  await logEventFb(eventType, lookup.orderId, operator.trim(), department);
-  if (next.status === 'closed' && lookup.status === 'open') {
-    await logEventFb('lookup_closed', lookup.orderId, operator.trim(), department);
-  }
-  return { ok: true };
 }
 
 export async function resendLookup(
@@ -819,14 +686,7 @@ export async function resendLookup(
     return { ok: true };
   }
 
-  await updateDoc(doc(lookupsCol(), lookup.id), {
-    at: Date.now(),
-    sentBy: operator.trim(),
-    status: 'open',
-    responses: {},
-  });
-  await logEventFb('lookup_sent', lookup.orderId, operator.trim());
-  return { ok: true };
+  return callMutation('resendLookup', { lookupId: lookup.id, operator });
 }
 
 export async function getOrderById(orderId: string): Promise<Order | null> {
