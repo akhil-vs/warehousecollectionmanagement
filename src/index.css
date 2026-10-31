@@ -16,6 +16,8 @@
   --font-display: 'Archivo Black', 'Arial Black', sans-serif;
   --font-body: 'Source Sans 3', 'Segoe UI', sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --page-gutter: clamp(0.75rem, 3.2vw, 1.5rem);
+  --content-max: 1100px;
   font-family: var(--font-body);
   line-height: 1.4;
   font-weight: 400;
@@ -33,15 +35,21 @@
   box-sizing: border-box;
 }
 
+html {
+  overflow-x: clip;
+}
+
 html,
 body,
 #root {
   min-height: 100%;
+  max-width: 100%;
 }
 
 body {
   margin: 0;
   min-width: 320px;
+  overflow-x: clip;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.28), transparent 16rem),
     repeating-linear-gradient(
