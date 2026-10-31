@@ -1,3 +1,5 @@
+import { IconAlert, IconCheck, IconOperator, IconSound } from './Icons';
+
 interface Props {
   operator: string;
   soundBlocked?: boolean;
@@ -19,7 +21,10 @@ export function ShiftBanner({
   return (
     <div className="shift-banner" role="status">
       <div>
-        <strong>{missing ? 'Start-of-shift checklist' : 'Confirm operator for this shift'}</strong>
+        <strong className="shift-banner-title">
+          <IconOperator />
+          {missing ? 'Start-of-shift checklist' : 'Confirm operator for this shift'}
+        </strong>
         <p>
           {missing
             ? 'Type your name above, then confirm. Actions stay blocked until you do.'
@@ -38,15 +43,18 @@ export function ShiftBanner({
       <div className="shift-actions">
         {soundBlocked && onUnlockSound && (
           <button type="button" className="btn warn-soft" onClick={onUnlockSound}>
+            <IconSound />
             Unlock sound
           </button>
         )}
         {!alertsEnabled && onEnableAlerts && (
           <button type="button" className="btn ghost" onClick={onEnableAlerts}>
+            <IconAlert />
             Enable alerts
           </button>
         )}
         <button type="button" className="btn primary" disabled={missing} onClick={() => onConfirm()}>
+          <IconCheck />
           Confirm shift
         </button>
       </div>

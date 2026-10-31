@@ -13,6 +13,17 @@ import { useNow } from '../hooks/useNow';
 import { CollectionDateTables } from './CollectionDateTables';
 import { useConfirm } from './ConfirmDialog';
 import { ReadyOrderEditForm, type ReadyOrderPatch } from './PalletReadyPanel';
+import {
+  IconAlert,
+  IconBarcode,
+  IconCancel,
+  IconClipboard,
+  IconDept,
+  IconEdit,
+  IconHistory,
+  IconPallet,
+  IconTruck,
+} from './Icons';
 
 interface Props {
   orders: Order[];
@@ -230,13 +241,19 @@ export function AdminPanel({
   return (
     <section className="panel">
       <div className="panel-head">
-        <h2>Admin</h2>
+        <div className="panel-title">
+          <IconClipboard />
+          <h2>Admin</h2>
+        </div>
         <p>Today’s board, wait-time report, corrections, departments, and PIN.</p>
       </div>
 
       <div className="overview-grid shift-kpis">
         <div className="overview-item">
-          <h3>Today</h3>
+          <h3>
+            <IconHistory />
+            Today
+          </h3>
           <p>
             <strong>{collectedToday.length}</strong> collected
           </p>
@@ -248,7 +265,10 @@ export function AdminPanel({
           </p>
         </div>
         <div className="overview-item">
-          <h3>Waiting now</h3>
+          <h3>
+            <IconTruck />
+            Waiting now
+          </h3>
           <p>
             <strong>{waiting.length}</strong> drivers
           </p>
@@ -260,7 +280,10 @@ export function AdminPanel({
           </p>
         </div>
         <div className="overview-item">
-          <h3>Wait-time report</h3>
+          <h3>
+            <IconAlert />
+            Wait-time report
+          </h3>
           <p>
             Avg open wait:{' '}
             <strong>
@@ -293,7 +316,10 @@ export function AdminPanel({
       <div className="overview-grid">
         {overview.map((row) => (
           <div key={row.dept} className="overview-item">
-            <h3>{row.dept}</h3>
+            <h3>
+              <IconDept />
+              {row.dept}
+            </h3>
             <p>
               <strong>{row.ready}</strong> ready
             </p>
@@ -309,7 +335,10 @@ export function AdminPanel({
 
       {waiting.length > 0 && (
         <div className="list-block">
-          <h3>Drivers waiting (oldest first)</h3>
+          <h3 className="icon-inline">
+            <IconTruck />
+            Drivers waiting (oldest first)
+          </h3>
           <ul className="order-list">
             {waiting.map((order) => (
               <li
@@ -335,7 +364,10 @@ export function AdminPanel({
       )}
 
       <div className="list-block">
-        <h3>Live orders — edit ready pallets / bay / collection date</h3>
+        <h3 className="icon-inline">
+          <IconPallet />
+          Live orders — edit ready pallets / bay / collection date
+        </h3>
       </div>
       <CollectionDateTables
         orders={liveByDate}
@@ -390,6 +422,7 @@ export function AdminPanel({
                         setEditError(null);
                       }}
                     >
+                      <IconEdit />
                       Edit
                     </button>
                   )}
@@ -429,9 +462,15 @@ export function AdminPanel({
       />
 
       <div className="admin-block">
-        <h3>Order correction</h3>
+        <h3 className="icon-inline">
+          <IconBarcode />
+          Order correction
+        </h3>
         <label className="field">
-          <span>Order ID</span>
+          <span className="icon-label">
+            <IconBarcode />
+            Order ID
+          </span>
           <input
             className="mono"
             value={orderId}
@@ -468,13 +507,17 @@ export function AdminPanel({
             Exception handover
           </button>
           <button type="button" className="btn ghost danger" disabled={busy} onClick={() => void remove()}>
+            <IconCancel />
             Delete order
           </button>
         </div>
       </div>
 
       <div className="admin-block">
-        <h3>Departments</h3>
+        <h3 className="icon-inline">
+          <IconDept />
+          Departments
+        </h3>
         <p className="muted">Comma-separated list. Changing names may force department PCs to reassign.</p>
         <label className="field">
           <span>Department names</span>

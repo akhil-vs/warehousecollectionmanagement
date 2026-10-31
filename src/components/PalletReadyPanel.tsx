@@ -14,6 +14,15 @@ import { useNow } from '../hooks/useNow';
 import { canAcknowledge, canCancelReady, canConfirmHandover, canEditReady } from '../lib/orderState';
 import { CollectionDateTables } from './CollectionDateTables';
 import { CollectionDateField } from './CollectionDateField';
+import {
+  IconBarcode,
+  IconBay,
+  IconCancel,
+  IconCheck,
+  IconDept,
+  IconEdit,
+  IconPallet,
+} from './Icons';
 
 export interface ReadyOrderPatch {
   pallets: number;
@@ -82,7 +91,10 @@ export function ReadyOrderEditForm({
   return (
     <form className="ready-edit-form" onSubmit={(e) => void submit(e)}>
       <label className="field">
-        <span>Pallets</span>
+        <span className="icon-label">
+          <IconPallet />
+          Pallets
+        </span>
         <input
           type="number"
           min={1}
@@ -93,7 +105,10 @@ export function ReadyOrderEditForm({
         />
       </label>
       <label className="field">
-        <span>Bay (optional)</span>
+        <span className="icon-label">
+          <IconBay />
+          Bay (optional)
+        </span>
         <input value={bay} onChange={(e) => setBay(e.target.value)} />
       </label>
       <CollectionDateField value={collectionDate} onChange={setCollectionDate} optional={false} />
@@ -269,21 +284,25 @@ export function PalletReadyPanel({
       <div className="order-actions table-actions">
         {canAck && canAcknowledge(order) && (
           <button type="button" className="btn primary" onClick={() => onAcknowledge(order)}>
+            <IconCheck />
             Acknowledge
           </button>
         )}
         {canHandover && canConfirmHandover(order) && (
           <button type="button" className="btn solid" onClick={() => onConfirmHandover(order)}>
+            <IconCheck />
             Confirm handover
           </button>
         )}
         {canEdit && canEditReady(order) && (
           <button type="button" className="btn ghost" onClick={() => startEdit(order)}>
+            <IconEdit />
             Edit
           </button>
         )}
         {canCancelReady(order) && canEdit && (
           <button type="button" className="btn ghost danger" onClick={() => onCancel(order)}>
+            <IconCancel />
             Cancel
           </button>
         )}
@@ -296,7 +315,10 @@ export function PalletReadyPanel({
   return (
     <section className="panel">
       <div className="panel-head">
-        <h2>Pallet ready</h2>
+        <div className="panel-title">
+          <IconPallet />
+          <h2>Pallet ready</h2>
+        </div>
         <p>
           Mark orders ready with optional pallets, bay, and collection date. Use <strong>Edit</strong>{' '}
           on any ready row to change pallets, bay, or collection date before the driver arrives.
@@ -305,7 +327,10 @@ export function PalletReadyPanel({
 
       <form className="ready-form" onSubmit={submit} noValidate>
         <label className="field">
-          <span>Order ID</span>
+          <span className="icon-label">
+            <IconBarcode />
+            Order ID
+          </span>
           <input
             ref={orderIdRef}
             className="mono"
@@ -319,7 +344,10 @@ export function PalletReadyPanel({
           />
         </label>
         <label className="field">
-          <span>Pallets (optional)</span>
+          <span className="icon-label">
+            <IconPallet />
+            Pallets (optional)
+          </span>
           <input
             type="number"
             min={1}
@@ -328,13 +356,19 @@ export function PalletReadyPanel({
           />
         </label>
         <label className="field">
-          <span>Bay (optional)</span>
+          <span className="icon-label">
+            <IconBay />
+            Bay (optional)
+          </span>
           <input value={bay} onChange={(e) => setBay(e.target.value)} />
         </label>
         <CollectionDateField value={collectionDate} onChange={setCollectionDate} />
         {role === 'admin' && (
           <label className="field">
-            <span>Department</span>
+            <span className="icon-label">
+              <IconDept />
+              Department
+            </span>
             <select
               value={department}
               onChange={(e) => setDepartment(e.target.value as Department)}
@@ -348,6 +382,7 @@ export function PalletReadyPanel({
           </label>
         )}
         <button type="submit" className="btn primary" disabled={busy}>
+          <IconCheck />
           {busy ? 'Saving…' : 'Mark ready'}
         </button>
       </form>

@@ -34,26 +34,40 @@ import { PalletReadyPanel } from './components/PalletReadyPanel';
 import { DockPanel } from './components/DockPanel';
 import { HistoryPanel } from './components/HistoryPanel';
 import { AdminPanel } from './components/AdminPanel';
+import {
+  IconClipboard,
+  IconHistory,
+  IconPallet,
+  IconTruck,
+  IconWarehouse,
+} from './components/Icons';
 import './App.css';
+
+function TabIcon({ icon }: { icon: 'pallet' | 'truck' | 'history' | 'admin' }) {
+  if (icon === 'pallet') return <IconPallet />;
+  if (icon === 'truck') return <IconTruck />;
+  if (icon === 'history') return <IconHistory />;
+  return <IconClipboard />;
+}
 
 function defaultTab(role: DeviceRole): TabId {
   if (role === 'dock') return 'driver-collection';
   return 'pallet-ready';
 }
 
-function tabsFor(role: DeviceRole): { id: TabId; label: string }[] {
+function tabsFor(role: DeviceRole): { id: TabId; label: string; icon: 'pallet' | 'truck' | 'history' | 'admin' }[] {
   if (role === 'dock') return [];
   if (role === 'admin') {
     return [
-      { id: 'pallet-ready', label: 'Pallet ready' },
-      { id: 'driver-collection', label: 'Driver collection' },
-      { id: 'history', label: 'History' },
-      { id: 'admin', label: 'Admin' },
+      { id: 'pallet-ready', label: 'Pallet ready', icon: 'pallet' },
+      { id: 'driver-collection', label: 'Driver collection', icon: 'truck' },
+      { id: 'history', label: 'History', icon: 'history' },
+      { id: 'admin', label: 'Admin', icon: 'admin' },
     ];
   }
   return [
-    { id: 'pallet-ready', label: 'Pallet ready' },
-    { id: 'history', label: 'History' },
+    { id: 'pallet-ready', label: 'Pallet ready', icon: 'pallet' },
+    { id: 'history', label: 'History', icon: 'history' },
   ];
 }
 
@@ -193,7 +207,12 @@ function AppShell() {
     return (
       <div className="setup-screen">
         <div className="setup-panel">
-          <p className="brand-mark">FreightFetch</p>
+          <div className="setup-brand">
+            <span className="brand-icon" aria-hidden>
+              <IconWarehouse />
+            </span>
+            <p className="brand-mark">FreightFetch</p>
+          </div>
           <h1>Cannot connect</h1>
           <p className="lede">{bootError}</p>
         </div>
@@ -205,7 +224,12 @@ function AppShell() {
     return (
       <div className="setup-screen">
         <div className="setup-panel">
-          <p className="brand-mark">FreightFetch</p>
+          <div className="setup-brand">
+            <span className="brand-icon" aria-hidden>
+              <IconWarehouse />
+            </span>
+            <p className="brand-mark">FreightFetch</p>
+          </div>
           <p className="lede">Connecting…</p>
         </div>
       </div>
@@ -371,6 +395,7 @@ function AppShell() {
               className={tab === t.id ? 'tab active' : 'tab'}
               onClick={() => setTab(t.id)}
             >
+              <TabIcon icon={t.icon} />
               {t.label}
             </button>
           ))}

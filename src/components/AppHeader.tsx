@@ -1,5 +1,14 @@
 import { useState } from 'react';
 import type { DeviceRole } from '../types';
+import {
+  IconAlert,
+  IconClipboard,
+  IconDept,
+  IconOperator,
+  IconSound,
+  IconTruck,
+  IconWarehouse,
+} from './Icons';
 
 interface Props {
   role: DeviceRole;
@@ -13,6 +22,12 @@ interface Props {
   reassignBusy?: boolean;
   reassignError?: string | null;
   onReassign: (pin: string) => Promise<boolean>;
+}
+
+function RoleIcon({ role }: { role: DeviceRole }) {
+  if (role === 'admin') return <IconClipboard />;
+  if (role === 'dock') return <IconTruck />;
+  return <IconDept />;
 }
 
 export function AppHeader({
@@ -36,12 +51,23 @@ export function AppHeader({
   return (
     <header className="app-header">
       <div className="header-brand">
-        <p className="brand-mark">FreightFetch</p>
-        <span className="role-chip">{roleLabel}</span>
+        <div className="brand-row">
+          <span className="brand-icon" aria-hidden>
+            <IconWarehouse />
+          </span>
+          <p className="brand-mark">FreightFetch</p>
+        </div>
+        <span className="role-chip">
+          <RoleIcon role={role} />
+          {roleLabel}
+        </span>
       </div>
       <div className="header-actions">
         <label className="operator-field">
-          <span>Operator</span>
+          <span className="icon-label">
+            <IconOperator />
+            Operator
+          </span>
           <input
             value={operator}
             onChange={(e) => onOperatorChange(e.target.value)}
@@ -51,11 +77,13 @@ export function AppHeader({
         </label>
         {!alertsEnabled && (
           <button type="button" className="btn ghost" onClick={onEnableAlerts}>
+            <IconAlert />
             Enable alerts
           </button>
         )}
         {soundBlocked && (
           <button type="button" className="btn warn-soft" onClick={onUnlockSound}>
+            <IconSound />
             Tap to enable sound
           </button>
         )}

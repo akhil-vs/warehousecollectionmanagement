@@ -5,6 +5,14 @@ import { formatDwell, formatTime, isCollectionOverdue, isStaleWait } from '../li
 import { lookupClaimedBy } from '../lib/orderState';
 import { useNow } from '../hooks/useNow';
 import { CollectionDateTables } from './CollectionDateTables';
+import {
+  IconAlert,
+  IconBarcode,
+  IconCancel,
+  IconDoor,
+  IconSearch,
+  IconTruck,
+} from './Icons';
 
 interface Props {
   readyOrders: Order[];
@@ -89,13 +97,19 @@ export function DockPanel({
   return (
     <section className="panel">
       <div className="panel-head">
-        <h2>Driver collection</h2>
+        <div className="panel-title">
+          <IconTruck />
+          <h2>Driver collection</h2>
+        </div>
         <p>Find a ready order, alert the department, then wait for handover.</p>
       </div>
 
       <form className="dock-meta" onSubmit={(e) => void onSearchSubmit(e)}>
         <label className="field search-field">
-          <span>Search ready list</span>
+          <span className="icon-label">
+            <IconSearch />
+            Search ready list
+          </span>
           <input
             ref={searchRef}
             value={q}
@@ -108,11 +122,17 @@ export function DockPanel({
           />
         </label>
         <label className="field">
-          <span>Door (optional)</span>
+          <span className="icon-label">
+            <IconDoor />
+            Door (optional)
+          </span>
           <input value={door} onChange={(e) => setDoor(e.target.value)} placeholder="e.g. 3" />
         </label>
         <label className="field">
-          <span>Haulier (optional)</span>
+          <span className="icon-label">
+            <IconTruck />
+            Haulier (optional)
+          </span>
           <input
             value={haulier}
             onChange={(e) => setHaulier(e.target.value)}
@@ -120,6 +140,7 @@ export function DockPanel({
           />
         </label>
         <button type="submit" className="btn ghost">
+          <IconBarcode />
           Go
         </button>
       </form>
@@ -185,6 +206,7 @@ export function DockPanel({
                 </span>
               </div>
               <button type="button" className="btn primary" onClick={() => collect(order)}>
+                <IconTruck />
                 Driver collection
               </button>
             </article>
@@ -225,6 +247,7 @@ export function DockPanel({
                 </td>
                 <td className="table-actions">
                   <button type="button" className="btn primary" onClick={() => collect(order)}>
+                    <IconTruck />
                     Driver collection
                   </button>
                 </td>
@@ -235,7 +258,10 @@ export function DockPanel({
       </div>
 
       <div className="list-block">
-        <h3>Verified — awaiting handover</h3>
+        <h3 className="icon-inline">
+          <IconAlert />
+          Verified — awaiting handover
+        </h3>
         {arrivedOrders.length === 0 && <p className="empty">None waiting.</p>}
         <ul className="order-list">
           {arrivedOrders.map((order) => (
@@ -261,6 +287,7 @@ export function DockPanel({
               </div>
               <div className="order-actions">
                 <button type="button" className="btn ghost" onClick={() => onUndoCollection(order)}>
+                  <IconCancel />
                   Undo collection
                 </button>
               </div>
@@ -271,7 +298,10 @@ export function DockPanel({
 
       {openLookups.length > 0 && (
         <div className="list-block">
-          <h3>Open department lookups</h3>
+          <h3 className="icon-inline">
+            <IconAlert />
+            Open department lookups
+          </h3>
           <ul className="order-list">
             {openLookups.map((lookup) => {
               const claimed = lookupClaimedBy(lookup, departments);

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Department, DeviceRole } from '../types';
+import { IconClipboard, IconDept, IconTruck, IconWarehouse } from './Icons';
 
 interface Props {
   pinConfigured: boolean | null;
@@ -16,8 +17,16 @@ export function RoleSetup({ pinConfigured, departments, busy, error, onAssign }:
   return (
     <div className="setup-screen">
       <div className="setup-panel">
-        <p className="brand-mark">FreightFetch</p>
-        <h1>Assign this computer</h1>
+        <div className="setup-brand">
+          <span className="brand-icon" aria-hidden>
+            <IconWarehouse />
+          </span>
+          <p className="brand-mark">FreightFetch</p>
+        </div>
+        <h1>
+          <IconClipboard />
+          Assign this computer
+        </h1>
         <p className="lede">
           {pinConfigured
             ? 'Enter the admin PIN to set this device’s role. The assignment stays on this computer.'
@@ -31,7 +40,16 @@ export function RoleSetup({ pinConfigured, departments, busy, error, onAssign }:
         </ol>
 
         <label className="field">
-          <span>Role</span>
+          <span className="icon-label">
+            {role === 'admin' ? (
+              <IconClipboard />
+            ) : role === 'dock' ? (
+              <IconTruck />
+            ) : (
+              <IconDept />
+            )}
+            Role
+          </span>
           <select value={role} onChange={(e) => setRole(e.target.value as DeviceRole)}>
             <option value="admin">Admin</option>
             <option value="dock">Dock / Gate</option>

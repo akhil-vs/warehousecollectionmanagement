@@ -3,6 +3,7 @@ import type { Department, Lookup, Order } from '../types';
 import { formatDwell, formatTime } from '../lib/format';
 import { canAcknowledge, canConfirmHandover, lookupNeedsDepartment } from '../lib/orderState';
 import { useNow } from '../hooks/useNow';
+import { IconAlert, IconCheck, IconSearch, IconTruck } from './Icons';
 
 interface Props {
   waitingForUs: Order[];
@@ -46,7 +47,10 @@ export function AlertBanners({
       {waitingForUs.map((order) => (
         <div key={order.id} className="pulse-banner driver">
           <div>
-            <strong>Driver waiting</strong>
+            <strong className="icon-inline">
+              <IconTruck />
+              Driver waiting
+            </strong>
             <p>
               Order <span className="mono">{order.id}</span> · {order.pallets} pallet
               {order.pallets === 1 ? '' : 's'}
@@ -61,11 +65,13 @@ export function AlertBanners({
           <div className="banner-actions">
             {canAck && canAcknowledge(order) && (
               <button type="button" className="btn primary" onClick={() => onAcknowledge(order)}>
+                <IconCheck />
                 Acknowledge
               </button>
             )}
             {canConfirmHandoverAction && canConfirmHandover(order) && (
               <button type="button" className="btn solid" onClick={() => onConfirmHandover(order)}>
+                <IconCheck />
                 Confirm handover
               </button>
             )}
@@ -98,7 +104,10 @@ export function AlertBanners({
         visibleLookups.map((lookup) => (
           <div key={lookup.id} className="pulse-banner lookup">
             <div>
-              <strong>Dock lookup</strong>
+              <strong className="icon-inline">
+                <IconSearch />
+                Dock lookup
+              </strong>
               <p>
                 Is order <span className="mono">{lookup.orderId}</span> yours? Sent by{' '}
                 {lookup.sentBy} at {formatTime(lookup.at)} · open {formatDwell(lookup.at, now)}
@@ -106,9 +115,11 @@ export function AlertBanners({
             </div>
             <div className="banner-actions">
               <button type="button" className="btn primary" onClick={() => onLookupOurs(lookup)}>
+                <IconCheck />
                 It is ours
               </button>
               <button type="button" className="btn ghost" onClick={() => onLookupNotOurs(lookup)}>
+                <IconAlert />
                 Not ours
               </button>
             </div>
