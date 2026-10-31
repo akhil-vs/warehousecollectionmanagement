@@ -1,16 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { Department, Order } from '../types';
 import {
+  collectionDateLabel,
   formatDwell,
   formatTime,
   isCollectionOverdue,
   startOfLocalDay,
   statusLabel,
 } from '../lib/format';
-import { STALE_WAIT_MS } from '../lib/orderState';
+import { canEditReady, STALE_WAIT_MS } from '../lib/orderState';
 import { useNow } from '../hooks/useNow';
 import { CollectionDateTables } from './CollectionDateTables';
 import { useConfirm } from './ConfirmDialog';
+import { ReadyOrderEditForm, type ReadyOrderPatch } from './PalletReadyPanel';
 
 interface Props {
   orders: Order[];
@@ -35,6 +37,10 @@ interface Props {
     departments: string[],
     pin: string,
   ) => Promise<{ ok: true; departments: Department[] } | { ok: false; error: string }>;
+  updateReady: (
+    order: Order,
+    patch: ReadyOrderPatch,
+  ) => Promise<{ ok: true } | { ok: false; error: string }>;
 }
 
 function averageMinutes(values: number[]): number | null {
@@ -52,6 +58,7 @@ export function AdminPanel({
   onExceptionHandover,
   onChangePin,
   onSetDepartments,
+  updateReady,
 }: Props) {
   const now = useNow();
   const confirm = useConfirm();
@@ -64,10 +71,22 @@ export function AdminPanel({
   const [currentPin, setCurrentPin] = useState('');
   const [nextPin, setNextPin] = useState('');
   const [deptDraft, setDeptDraft] = useState(departments.join(', '));
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   useEffect(() => {
     setDeptDraft(departments.join(', '));
   }, [departments]);
+
+  useEffect(() => {
+    if (!editingId) return;
+    const current = orders.find((o) => o.id === editingId);
+    if (!current || current.status !== 'ready') {
+      setEditingId(null);
+      setEditError(null);
+    }
+  }, [orders, editingId]);
 
   const waiting = useMemo(
     () =>
@@ -315,6 +334,9 @@ export function AdminPanel({
         </div>
       )}
 
+      <div className="list-block">
+        <h3>Live orders — edit ready pallets / bay / collection date</h3>
+      </div>
       <CollectionDateTables
         orders={liveByDate}
         now={now}
@@ -325,26 +347,85 @@ export function AdminPanel({
             <th>Status</th>
             <th>Pallets</th>
             <th>Bay</th>
+            <th>Collect</th>
             <th>Dept</th>
             <th>Ready</th>
+            <th>Actions</th>
           </>
         }
-        renderRow={(o) => (
-          <tr key={o.id} className={o.status === 'arrived' ? 'arrived' : undefined}>
-            <td className="mono">{o.id}</td>
-            <td>
-              <span className={`status-pill ${o.status}`}>{statusLabel(o.status)}</span>
-            </td>
-            <td>{o.pallets}</td>
-            <td>{o.bay || <span className="muted">—</span>}</td>
-            <td>{o.department}</td>
-            <td>
-              {o.readyBy}
-              <br />
-              <span className="muted">{formatTime(o.readyAt)}</span>
-            </td>
-          </tr>
-        )}
+        renderRow={(o) => {
+          const editing = editingId === o.id;
+          return (
+            <Fragment key={o.id}>
+              <tr
+                className={[
+                  o.status === 'arrived' ? 'arrived' : '',
+                  editing ? 'editing' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+              >
+                <td className="mono">{o.id}</td>
+                <td>
+                  <span className={`status-pill ${o.status}`}>{statusLabel(o.status)}</span>
+                </td>
+                <td>{o.pallets}</td>
+                <td>{o.bay || <span className="muted">—</span>}</td>
+                <td>
+                  {collectionDateLabel(o.collectionDate, now) || <span className="muted">—</span>}
+                </td>
+                <td>{o.department}</td>
+                <td>
+                  {o.readyBy}
+                  <br />
+                  <span className="muted">{formatTime(o.readyAt)}</span>
+                </td>
+                <td className="table-actions">
+                  {canEditReady(o) && (
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      onClick={() => {
+                        setEditingId(o.id);
+                        setEditError(null);
+                      }}
+                    >
+                      Edit
+                    </button>
+                  )}
+                </td>
+              </tr>
+              {editing && (
+                <tr className="editing">
+                  <td colSpan={8}>
+                    <ReadyOrderEditForm
+                      order={o}
+                      busy={editBusy}
+                      error={editError}
+                      onSave={async (patch) => {
+                        setEditBusy(true);
+                        setEditError(null);
+                        const result = await updateReady(o, patch);
+                        setEditBusy(false);
+                        if (!result.ok) {
+                          setEditError(result.error);
+                          return false;
+                        }
+                        setEditingId(null);
+                        setMsg(`Updated ${o.id}`);
+                        return true;
+                      }}
+                      onCancel={() => {
+                        setEditingId(null);
+                        setEditError(null);
+                      }}
+                    />
+                  </td>
+                </tr>
+              )}
+            </Fragment>
+          );
+        }}
       />
 
       <div className="admin-block">

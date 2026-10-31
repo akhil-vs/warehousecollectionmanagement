@@ -1,11 +1,19 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
 import type { Department, DeviceRole, Order } from '../types';
-import { formatDwell, formatTime, isCollectionOverdue, isStaleWait, statusLabel } from '../lib/format';
+import {
+  collectionDateLabel,
+  formatDwell,
+  formatTime,
+  isCollectionOverdue,
+  isStaleWait,
+  statusLabel,
+} from '../lib/format';
 import { isDepartmentRole } from '../hooks/useDeviceRole';
 import { useNow } from '../hooks/useNow';
 import { canAcknowledge, canCancelReady, canConfirmHandover, canEditReady } from '../lib/orderState';
 import { CollectionDateTables } from './CollectionDateTables';
+import { CollectionDateField } from './CollectionDateField';
 
 export interface ReadyOrderPatch {
   pallets: number;
@@ -38,7 +46,7 @@ interface Props {
   onCancel: (order: Order) => void;
 }
 
-function ReadyOrderEditForm({
+export function ReadyOrderEditForm({
   order,
   busy,
   error,
@@ -88,17 +96,10 @@ function ReadyOrderEditForm({
         <span>Bay (optional)</span>
         <input value={bay} onChange={(e) => setBay(e.target.value)} />
       </label>
-      <label className="field">
-        <span>Collection date</span>
-        <input
-          type="date"
-          value={collectionDate}
-          onChange={(e) => setCollectionDate(e.target.value)}
-        />
-      </label>
+      <CollectionDateField value={collectionDate} onChange={setCollectionDate} optional={false} />
       <div className="row-actions">
         <button type="submit" className="btn primary" disabled={busy}>
-          {busy ? 'Saving…' : 'Save'}
+          {busy ? 'Saving…' : 'Save changes'}
         </button>
         <button type="button" className="btn ghost" disabled={busy} onClick={onCancel}>
           Cancel
@@ -258,13 +259,47 @@ export function PalletReadyPanel({
     return true;
   }
 
+  function startEdit(order: Order) {
+    setEditingId(order.id);
+    setEditError(null);
+  }
+
+  function renderActions(order: Order) {
+    return (
+      <div className="order-actions table-actions">
+        {canAck && canAcknowledge(order) && (
+          <button type="button" className="btn primary" onClick={() => onAcknowledge(order)}>
+            Acknowledge
+          </button>
+        )}
+        {canHandover && canConfirmHandover(order) && (
+          <button type="button" className="btn solid" onClick={() => onConfirmHandover(order)}>
+            Confirm handover
+          </button>
+        )}
+        {canEdit && canEditReady(order) && (
+          <button type="button" className="btn ghost" onClick={() => startEdit(order)}>
+            Edit
+          </button>
+        )}
+        {canCancelReady(order) && canEdit && (
+          <button type="button" className="btn ghost danger" onClick={() => onCancel(order)}>
+            Cancel
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  const colSpan = role === 'admin' ? 8 : 7;
+
   return (
     <section className="panel">
       <div className="panel-head">
         <h2>Pallet ready</h2>
         <p>
-          Scan or type an order ID to mark it ready. Pallet count is optional and defaults to 1. Edit
-          a ready order to change pallets, bay, or collection date.
+          Mark orders ready with optional pallets, bay, and collection date. Use <strong>Edit</strong>{' '}
+          on any ready row to change pallets, bay, or collection date before the driver arrives.
         </p>
       </div>
 
@@ -296,14 +331,7 @@ export function PalletReadyPanel({
           <span>Bay (optional)</span>
           <input value={bay} onChange={(e) => setBay(e.target.value)} />
         </label>
-        <label className="field">
-          <span>Collection date (optional)</span>
-          <input
-            type="date"
-            value={collectionDate}
-            onChange={(e) => setCollectionDate(e.target.value)}
-          />
-        </label>
+        <CollectionDateField value={collectionDate} onChange={setCollectionDate} />
         {role === 'admin' && (
           <label className="field">
             <span>Department</span>
@@ -325,111 +353,133 @@ export function PalletReadyPanel({
       </form>
       {error && <p className="form-error">{error}</p>}
 
-      <CollectionDateTables
-        orders={visible}
-        now={now}
-        emptyText="No active orders."
-        headers={
-          <>
-            <th>Order</th>
-            <th>Status</th>
-            <th>Pallets</th>
-            <th>Bay</th>
-            {role === 'admin' && <th>Dept</th>}
-            <th>Ready</th>
-            <th>Actions</th>
-          </>
-        }
-        renderRow={(order) => {
+      <div className="ready-mobile-cards" aria-label="Active orders">
+        {visible.length === 0 && <p className="empty">No active orders.</p>}
+        {visible.map((order) => {
           const dwellFrom = order.status === 'arrived' ? order.arrivedAt : order.readyAt;
           const stale =
             (order.status === 'arrived' && isStaleWait(dwellFrom, now)) ||
             (order.status === 'ready' && isCollectionOverdue(order.collectionDate, now));
           const editing = editingId === order.id;
-          const colSpan = role === 'admin' ? 7 : 6;
           return (
-            <Fragment key={order.id}>
-              <tr
-                className={[
-                  order.status === 'arrived' ? 'arrived' : '',
-                  stale ? 'stale' : '',
-                  editing ? 'editing' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-              >
-                <td className="mono">{order.id}</td>
-                <td>
-                  <span className={`status-pill ${order.status}`}>{statusLabel(order.status)}</span>
-                  {order.door ? <span className="muted"> · Door {order.door}</span> : null}
-                </td>
-                <td>{order.pallets}</td>
-                <td>{order.bay || <span className="muted">—</span>}</td>
-                {role === 'admin' && <td>{order.department}</td>}
-                <td>
-                  {order.readyBy}
-                  <br />
-                  <span className="muted">
-                    {formatTime(order.readyAt)}
-                    {order.status === 'arrived'
-                      ? ` · waiting ${formatDwell(order.arrivedAt, now)}`
-                      : ` · ready ${formatDwell(order.readyAt, now)}`}
-                  </span>
-                </td>
-                <td className="table-actions">
-                  {canAck && canAcknowledge(order) && (
-                    <button type="button" className="btn primary" onClick={() => onAcknowledge(order)}>
-                      Acknowledge
-                    </button>
-                  )}
-                  {canHandover && canConfirmHandover(order) && (
-                    <button
-                      type="button"
-                      className="btn solid"
-                      onClick={() => onConfirmHandover(order)}
-                    >
-                      Confirm handover
-                    </button>
-                  )}
-                  {canEdit && canEditReady(order) && (
-                    <button
-                      type="button"
-                      className="btn ghost"
-                      onClick={() => {
-                        setEditingId(order.id);
-                        setEditError(null);
-                      }}
-                    >
-                      Edit
-                    </button>
-                  )}
-                  {canCancelReady(order) && canEdit && (
-                    <button type="button" className="btn ghost danger" onClick={() => onCancel(order)}>
-                      Cancel
-                    </button>
-                  )}
-                </td>
-              </tr>
-              {editing && (
-                <tr className="editing">
-                  <td colSpan={colSpan}>
-                    <ReadyOrderEditForm
-                      order={order}
-                      busy={editBusy}
-                      error={editError}
-                      onSave={(patch) => saveEdit(order, patch)}
-                      onCancel={() => {
-                        setEditingId(null);
-                        setEditError(null);
-                      }}
-                    />
-                  </td>
-                </tr>
+            <article
+              key={order.id}
+              className={['dock-card', order.status === 'arrived' ? 'arrived' : '', stale ? 'stale' : '']
+                .filter(Boolean)
+                .join(' ')}
+            >
+              <div className="dock-card-main">
+                <span className="mono order-id">{order.id}</span>
+                <span className={`status-pill ${order.status}`}>{statusLabel(order.status)}</span>
+                <span>
+                  {order.pallets} plt{order.bay ? ` · Bay ${order.bay}` : ''}
+                  {role === 'admin' ? ` · ${order.department}` : ''}
+                </span>
+                <span className="muted">
+                  {collectionDateLabel(order.collectionDate, now) ?? 'No collection date'}
+                  {' · '}
+                  {order.readyBy} · {formatTime(order.readyAt)}
+                </span>
+              </div>
+              {editing ? (
+                <ReadyOrderEditForm
+                  order={order}
+                  busy={editBusy}
+                  error={editError}
+                  onSave={(patch) => saveEdit(order, patch)}
+                  onCancel={() => {
+                    setEditingId(null);
+                    setEditError(null);
+                  }}
+                />
+              ) : (
+                renderActions(order)
               )}
-            </Fragment>
+            </article>
           );
-        }}
-      />
+        })}
+      </div>
+
+      <div className="ready-desktop-tables">
+        <CollectionDateTables
+          orders={visible}
+          now={now}
+          emptyText="No active orders."
+          headers={
+            <>
+              <th>Order</th>
+              <th>Status</th>
+              <th>Pallets</th>
+              <th>Bay</th>
+              <th>Collect</th>
+              {role === 'admin' && <th>Dept</th>}
+              <th>Ready</th>
+              <th>Actions</th>
+            </>
+          }
+          renderRow={(order) => {
+            const dwellFrom = order.status === 'arrived' ? order.arrivedAt : order.readyAt;
+            const stale =
+              (order.status === 'arrived' && isStaleWait(dwellFrom, now)) ||
+              (order.status === 'ready' && isCollectionOverdue(order.collectionDate, now));
+            const editing = editingId === order.id;
+            return (
+              <Fragment key={order.id}>
+                <tr
+                  className={[
+                    order.status === 'arrived' ? 'arrived' : '',
+                    stale ? 'stale' : '',
+                    editing ? 'editing' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  <td className="mono">{order.id}</td>
+                  <td>
+                    <span className={`status-pill ${order.status}`}>{statusLabel(order.status)}</span>
+                    {order.door ? <span className="muted"> · Door {order.door}</span> : null}
+                  </td>
+                  <td>{order.pallets}</td>
+                  <td>{order.bay || <span className="muted">—</span>}</td>
+                  <td>
+                    {collectionDateLabel(order.collectionDate, now) || (
+                      <span className="muted">—</span>
+                    )}
+                  </td>
+                  {role === 'admin' && <td>{order.department}</td>}
+                  <td>
+                    {order.readyBy}
+                    <br />
+                    <span className="muted">
+                      {formatTime(order.readyAt)}
+                      {order.status === 'arrived'
+                        ? ` · waiting ${formatDwell(order.arrivedAt, now)}`
+                        : ` · ready ${formatDwell(order.readyAt, now)}`}
+                    </span>
+                  </td>
+                  <td className="table-actions">{renderActions(order)}</td>
+                </tr>
+                {editing && (
+                  <tr className="editing">
+                    <td colSpan={colSpan}>
+                      <ReadyOrderEditForm
+                        order={order}
+                        busy={editBusy}
+                        error={editError}
+                        onSave={(patch) => saveEdit(order, patch)}
+                        onCancel={() => {
+                          setEditingId(null);
+                          setEditError(null);
+                        }}
+                      />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          }}
+        />
+      </div>
     </section>
   );
 }

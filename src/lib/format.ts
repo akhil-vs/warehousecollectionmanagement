@@ -10,6 +10,14 @@ export function todayInputValue(now = Date.now()): string {
   return todayShared(now);
 }
 
+/** YYYY-MM-DD for a local calendar day offset from `now` (0 = today). */
+export function dateInputValueOffset(days: number, now = Date.now()): string {
+  const d = new Date(now);
+  d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() + days);
+  return todayInputValue(d.getTime());
+}
+
 export function formatTime(ts?: number): string {
   if (!ts) return '—';
   return new Date(ts).toLocaleString(undefined, {
