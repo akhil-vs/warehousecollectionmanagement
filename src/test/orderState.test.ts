@@ -3,7 +3,9 @@ import {
   allDepartmentsNotOurs,
   canAcknowledge,
   canConfirmHandover,
+  dockRelevantLookups,
   lookupClaimedBy,
+  lookupDockStatusLabel,
   markReadyConflict,
   normalizeDepartments,
   withLookupResponse,
@@ -63,15 +65,36 @@ describe('lookup responses', () => {
     const afterB2B = withLookupResponse(base, 'B2B', 'not_ours', depts);
     expect(afterB2B.responses?.B2B).toBe('not_ours');
     expect(afterB2B.status).toBe('open');
+    expect(lookupDockStatusLabel(afterB2B, depts)).toBe('B2B said not ours');
 
     const afterBoth = withLookupResponse(afterB2B, 'Therabody', 'not_ours', depts);
     expect(allDepartmentsNotOurs(afterBoth, depts)).toBe(true);
-    expect(afterBoth.status).toBe('closed');
+    // Stay open so dock / gate still sees the not-ours result until they close it.
+    expect(afterBoth.status).toBe('open');
+    expect(lookupDockStatusLabel(afterBoth, depts)).toBe('All departments said not ours');
   });
 
   it('tracks claims', () => {
     const claimed = withLookupResponse(base, 'Therabody', 'ours', depts);
     expect(lookupClaimedBy(claimed, depts)).toEqual(['Therabody']);
+    expect(lookupDockStatusLabel(claimed, depts)).toBe('Claimed by Therabody');
+  });
+
+  it('keeps recent all-not-ours closed lookups visible to dock', () => {
+    const rejected: Lookup = {
+      ...base,
+      status: 'closed',
+      responses: { B2B: 'not_ours', Therabody: 'not_ours' },
+      at: 1_000,
+    };
+    const found: Lookup = { ...base, id: 'lk2', status: 'found', at: 1_000 };
+    const stale: Lookup = {
+      ...rejected,
+      id: 'lk3',
+      at: 1_000 - 9 * 60 * 60 * 1000,
+    };
+    const visible = dockRelevantLookups([rejected, found, stale], depts, 1_000);
+    expect(visible.map((l) => l.id)).toEqual(['lk1']);
   });
 });
 

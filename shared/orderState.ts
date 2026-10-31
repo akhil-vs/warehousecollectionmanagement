@@ -100,14 +100,48 @@ export function withLookupResponse(
   lookup: Lookup,
   department: Department,
   response: LookupResponse,
-  departments: readonly string[],
+  _departments: readonly string[],
 ): Lookup {
-  const responses = { ...lookup.responses, [department]: response };
-  const next: Lookup = { ...lookup, responses };
-  if (response === 'not_ours' && allDepartmentsNotOurs(next, departments)) {
-    next.status = 'closed';
+  // Keep status open when every department says not_ours so dock / gate still
+  // sees the result and can dismiss it. Departments already answered, so their
+  // banners disappear via lookupNeedsDepartment.
+  void _departments;
+  return {
+    ...lookup,
+    responses: { ...lookup.responses, [department]: response },
+  };
+}
+
+export function lookupDockStatusLabel(
+  lookup: Lookup,
+  departments: readonly string[],
+): string {
+  const claimed = lookupClaimedBy(lookup, departments);
+  if (claimed.length > 0) return `Claimed by ${claimed.join(', ')}`;
+  if (allDepartmentsNotOurs(lookup, departments)) {
+    return 'All departments said not ours';
   }
-  return next;
+  const passed = departments.filter((d) => lookup.responses?.[d] === 'not_ours');
+  if (passed.length > 0) return `${passed.join(', ')} said not ours`;
+  return 'No department has answered yet';
+}
+
+/** Lookups the dock / gate should still see, including recent all-not-ours results. */
+export function dockRelevantLookups(
+  lookups: Lookup[],
+  departments: readonly string[],
+  now = Date.now(),
+): Lookup[] {
+  return lookups
+    .filter((l) => {
+      if (l.status === 'open') return true;
+      return (
+        l.status === 'closed' &&
+        allDepartmentsNotOurs(l, departments) &&
+        now - l.at <= SHIFT_MS
+      );
+    })
+    .sort((a, b) => b.at - a.at);
 }
 
 export function resolvePalletCount(pallets: number | undefined): number {
