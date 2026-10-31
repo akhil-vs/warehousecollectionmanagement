@@ -68,9 +68,10 @@ npx firebase deploy --only firestore:rules,functions
 
 1. Import this GitHub repo into Vercel.
 2. Framework preset: Vite (build `npm run build`, output `dist`).
-3. Add the same `VITE_FIREBASE_*` variables for Production and Preview.
-4. Deploy.
-5. In Firebase Console → Authentication → Settings → **Authorized domains**, add your Vercel hostname(s).
+3. Deploy. The public Firebase web config lives in `src/lib/firebaseWebConfig.ts` (safe to ship — security is Auth + Firestore rules + callables, not hiding these values). Optional: set `VITE_FIREBASE_*` in the Vercel dashboard or a local `.env` to override without a code change.
+4. In Firebase Console → Authentication → Settings → **Authorized domains**, add your Vercel hostname(s).
+
+Without a usable Firebase web config the SPA shows **Demo mode** (in-browser only).
 
 `vercel.json` rewrites all routes to `index.html` for the SPA.
 
