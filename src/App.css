@@ -349,6 +349,11 @@
   min-width: 8.5rem;
 }
 
+.ready-form .collection-date-field {
+  grid-column: span 2;
+  min-width: 0;
+}
+
 .dock-meta .search-field {
   grid-column: 1 / -1;
   margin-bottom: 0;
@@ -920,26 +925,44 @@
 
 .collection-date-controls {
   display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  min-width: 0;
 }
 
-.date-quick {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
+.collection-date-controls input[type='date'] {
+  flex: 1 1 10rem;
+  min-width: 9.5rem;
+  width: auto;
+  min-height: 44px;
 }
 
-.date-quick .btn {
-  min-height: 36px;
-  padding: 0.35rem 0.7rem;
+.collection-date-controls .btn {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 0.45rem 0.7rem;
   font-size: 0.85rem;
+  white-space: nowrap;
 }
 
-.date-quick .btn.active-quick {
+.collection-date-controls .btn.active-quick {
   border-color: var(--accent);
   color: var(--accent-ink);
   background: rgba(224, 160, 69, 0.18);
+}
+
+@media (max-width: 720px) {
+  .ready-form .collection-date-field {
+    grid-column: 1 / -1;
+  }
+
+  .collection-date-controls input[type='date'] {
+    flex: 1 1 8rem;
+    min-width: 8rem;
+  }
 }
 
 .ready-mobile-cards {
