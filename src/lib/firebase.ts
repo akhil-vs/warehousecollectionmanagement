@@ -7,14 +7,46 @@ import {
 } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
 import { getFunctions, type Functions } from 'firebase/functions';
+import { firebaseWebConfig } from './firebaseWebConfig';
+
+function envKey(name: keyof typeof firebaseWebConfig): string {
+  switch (name) {
+    case 'apiKey':
+      return 'API_KEY';
+    case 'authDomain':
+      return 'AUTH_DOMAIN';
+    case 'projectId':
+      return 'PROJECT_ID';
+    case 'storageBucket':
+      return 'STORAGE_BUCKET';
+    case 'messagingSenderId':
+      return 'MESSAGING_SENDER_ID';
+    case 'appId':
+      return 'APP_ID';
+  }
+}
+
+function readConfigured(name: keyof typeof firebaseWebConfig): string | undefined {
+  const fromEnv = import.meta.env[`VITE_FIREBASE_${envKey(name)}`] as string | undefined;
+  if (typeof fromEnv === 'string') {
+    const trimmed = fromEnv.trim();
+    if (trimmed && !trimmed.startsWith('your-')) return trimmed;
+  }
+  // Production/Vercel builds must not depend on dashboard env — ship public web config.
+  if (import.meta.env.PROD) {
+    const baked = firebaseWebConfig[name]?.trim();
+    if (baked && !baked.startsWith('your-')) return baked;
+  }
+  return undefined;
+}
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY as string | undefined,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN as string | undefined,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID as string | undefined,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET as string | undefined,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID as string | undefined,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID as string | undefined,
+  apiKey: readConfigured('apiKey'),
+  authDomain: readConfigured('authDomain'),
+  projectId: readConfigured('projectId'),
+  storageBucket: readConfigured('storageBucket'),
+  messagingSenderId: readConfigured('messagingSenderId'),
+  appId: readConfigured('appId'),
 };
 
 const FUNCTIONS_REGION = 'europe-west2';
