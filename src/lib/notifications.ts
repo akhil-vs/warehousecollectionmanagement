@@ -1,4 +1,4 @@
-const BASE_TITLE = 'Warehouse Collections';
+const BASE_TITLE = 'Collecto';
 
 export function updateTabTitle(waitingCount: number): void {
   if (typeof document === 'undefined') return;

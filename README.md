@@ -1,4 +1,4 @@
-# Warehouse Collections
+# Collecto
 
 Live warehouse dock app: departments mark pallets ready, the dock alerts the owning department when a driver arrives, and the department confirms handover. Every action is stamped with the operator name and time.
 

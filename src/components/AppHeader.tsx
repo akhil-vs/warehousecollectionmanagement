@@ -36,7 +36,7 @@ export function AppHeader({
   return (
     <header className="app-header">
       <div className="header-brand">
-        <p className="brand-mark">Warehouse Collections</p>
+        <p className="brand-mark">Collecto</p>
         <span className="role-chip">{roleLabel}</span>
       </div>
       <div className="header-actions">
