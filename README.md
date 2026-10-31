@@ -17,7 +17,7 @@ Live warehouse dock app: departments mark pallets ready, the dock alerts the own
 | Undo driver collection | No | Yes | Yes |
 | History | Own dept | Hidden | Full |
 
-Device role is chosen once with the admin PIN and stored in `localStorage` on that computer. Reassigning a department or admin PC requires the PIN again. Dock PCs hide reassign (kiosk). Operator names must be confirmed every 8 hours.
+Device role is chosen once with the admin PIN and stored in `localStorage` on that computer. Reassigning any PC (department, admin, or dock / gate) requires the PIN again. Operator names must be confirmed every 8 hours.
 
 ## Security model
 

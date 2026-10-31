@@ -258,7 +258,6 @@ function AppShell() {
         }}
         soundBlocked={soundBlocked && !isSoundUnlocked()}
         onUnlockSound={() => void unlockSound().then((ok) => setSoundBlocked(!ok))}
-        hideReassign={role === 'dock'}
         reassignBusy={device.busy}
         reassignError={device.error}
         onReassign={async (pin) => {
