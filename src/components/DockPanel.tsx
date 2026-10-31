@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { Department, Lookup, Order } from '../types';
 import { formatDwell, formatTime, isCollectionOverdue, isStaleWait } from '../lib/format';
-import { lookupClaimedBy } from '../lib/orderState';
+import { allDepartmentsNotOurs, lookupDockStatusLabel } from '../lib/orderState';
 import { useNow } from '../hooks/useNow';
 import { CollectionDateTables } from './CollectionDateTables';
 import {
@@ -300,26 +300,25 @@ export function DockPanel({
         <div className="list-block">
           <h3 className="icon-inline">
             <IconAlert />
-            Open department lookups
+            Department lookups
           </h3>
           <ul className="order-list">
             {openLookups.map((lookup) => {
-              const claimed = lookupClaimedBy(lookup, departments);
-              const passed = departments.filter((d) => lookup.responses?.[d] === 'not_ours');
+              const rejected = allDepartmentsNotOurs(lookup, departments);
               return (
-                <li key={lookup.id}>
+                <li key={lookup.id} className={rejected ? 'stale' : undefined}>
                   <div className="order-main">
                     <span className="mono order-id">{lookup.orderId}</span>
+                    {rejected && (
+                      <span className="status-pill arrived">Not ours</span>
+                    )}
                     <span className="muted">
-                      Sent by {lookup.sentBy} · {formatTime(lookup.at)} · open{' '}
+                      Sent by {lookup.sentBy} · {formatTime(lookup.at)} ·{' '}
+                      {lookup.status === 'open' ? 'open' : 'closed'}{' '}
                       {formatDwell(lookup.at, now)}
                     </span>
-                    <span className="muted">
-                      {claimed.length > 0
-                        ? `Claimed by ${claimed.join(', ')}`
-                        : passed.length > 0
-                          ? `${passed.join(', ')} said not ours`
-                          : 'No department has answered yet'}
+                    <span className={rejected ? undefined : 'muted'}>
+                      {lookupDockStatusLabel(lookup, departments)}
                     </span>
                   </div>
                   <div className="order-actions">
@@ -330,13 +329,15 @@ export function DockPanel({
                     >
                       Resend
                     </button>
-                    <button
-                      type="button"
-                      className="btn ghost"
-                      onClick={() => onCloseLookup(lookup)}
-                    >
-                      Close
-                    </button>
+                    {lookup.status === 'open' && (
+                      <button
+                        type="button"
+                        className="btn ghost"
+                        onClick={() => onCloseLookup(lookup)}
+                      >
+                        Close
+                      </button>
+                    )}
                   </div>
                 </li>
               );

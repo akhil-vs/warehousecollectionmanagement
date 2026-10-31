@@ -17,6 +17,8 @@ export {
   lookupNeedsDepartment,
   allDepartmentsNotOurs,
   lookupClaimedBy,
+  lookupDockStatusLabel,
+  dockRelevantLookups,
   withLookupResponse,
   resolvePalletCount,
   readyEditNote,

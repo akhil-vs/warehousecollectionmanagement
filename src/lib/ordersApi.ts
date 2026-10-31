@@ -686,9 +686,6 @@ export async function respondToLookup(
         status: next.status,
       });
       demoLogEvent(eventType, lookup.orderId, operator.trim(), department);
-      if (next.status === 'closed' && latest.status === 'open') {
-        demoLogEvent('lookup_closed', lookup.orderId, operator.trim(), department);
-      }
       return { ok: true };
     } catch (err) {
       return { ok: false, error: toUserError(err, 'Could not respond.') };

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { DeviceRole, Lookup, Order, TabId } from './types';
 import { isFirebaseConfigured, ensureAnonymousAuth } from './lib/firebase';
 import { isSoundUnlocked, unlockSound } from './lib/sound';
@@ -21,6 +21,7 @@ import {
   undoDriverCollection,
   updateLookupStatus,
 } from './lib/ordersApi';
+import { dockRelevantLookups } from './lib/orderState';
 import { useDeviceRole, isDepartmentRole } from './hooks/useDeviceRole';
 import { useWarehouseData } from './hooks/useWarehouseData';
 import { useToast } from './hooks/useToast';
@@ -134,12 +135,18 @@ function AppShell() {
   const [alertResetKey, setAlertResetKey] = useState(0);
   const [adminPinCache, setAdminPinCache] = useState('');
 
+  const dockLookups = useMemo(
+    () => dockRelevantLookups(data.lookups, device.departments),
+    [data.lookups, device.departments],
+  );
+
   const { waitingForUs } = useAlerts({
     role: device.role,
     departments: device.departments,
     orders: data.orders,
     arrivedOrders: data.arrivedOrders,
     openLookups: data.openLookups,
+    dockLookups,
     onToast: showToast,
     resetKey: alertResetKey,
   });
@@ -462,7 +469,7 @@ function AppShell() {
             readyOrders={data.readyOrders}
             arrivedOrders={data.arrivedOrders}
             allOrders={data.orders}
-            openLookups={data.openLookups}
+            openLookups={dockLookups}
             departments={device.departments}
             operator={device.operator}
             onDriverCollection={(order: Order, extras) => {

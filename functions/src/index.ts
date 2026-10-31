@@ -608,8 +608,7 @@ export const respondToLookup = onCall(async (request) => {
     if (!isKnownDepartment(department, departments)) return fail('Unknown department.');
 
     let orderId = '';
-    let closed = false;
-    let eventType: EventType = response === 'ours' ? 'lookup_ours' : 'lookup_not_ours';
+    const eventType: EventType = response === 'ours' ? 'lookup_ours' : 'lookup_not_ours';
 
     await db.runTransaction(async (tx) => {
       const ref = db.collection('lookups').doc(lookupId);
@@ -618,7 +617,6 @@ export const respondToLookup = onCall(async (request) => {
       const existing = mapLookup(snap.id, snap.data()!);
       orderId = existing.orderId;
       const next = withLookupResponse(existing, department, response, departments);
-      closed = next.status === 'closed' && existing.status === 'open';
       tx.update(ref, {
         responses: next.responses ?? {},
         status: next.status,
@@ -626,7 +624,6 @@ export const respondToLookup = onCall(async (request) => {
     });
 
     await logEvent(eventType, orderId, operator, department);
-    if (closed) await logEvent('lookup_closed', orderId, operator, department);
     return ok();
   });
 });

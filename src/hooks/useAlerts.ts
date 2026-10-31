@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import type { DeviceRole, Lookup, Order } from '../types';
+import { allDepartmentsNotOurs } from '../lib/orderState';
 import { SoundPatterns } from '../lib/sound';
 import { showBrowserNotification, updateTabTitle } from '../lib/notifications';
 import { isDepartmentRole } from './useDepartments';
@@ -10,6 +11,8 @@ interface Args {
   orders: Order[];
   arrivedOrders: Order[];
   openLookups: Lookup[];
+  /** Includes recent all-not-ours closed lookups for dock messaging. */
+  dockLookups: Lookup[];
   onToast: (message: string) => void;
   resetKey?: number;
 }
@@ -20,6 +23,7 @@ export function useAlerts({
   orders,
   arrivedOrders,
   openLookups,
+  dockLookups,
   onToast,
   resetKey = 0,
 }: Args) {
@@ -27,6 +31,7 @@ export function useAlerts({
   const seenArrived = useRef<Set<string>>(new Set());
   const seenCollected = useRef<Set<string>>(new Set());
   const seenLookups = useRef<Set<string>>(new Set());
+  const seenLookupNotOurs = useRef<Set<string>>(new Set());
   const seenAck = useRef<Set<string>>(new Set());
   const primed = useRef(false);
 
@@ -36,6 +41,7 @@ export function useAlerts({
     seenArrived.current.clear();
     seenCollected.current.clear();
     seenLookups.current.clear();
+    seenLookupNotOurs.current.clear();
     seenAck.current.clear();
   }, [resetKey]);
 
@@ -81,6 +87,11 @@ export function useAlerts({
         if (o.status === 'collected') seenCollected.current.add(o.id);
       });
       openLookups.forEach((l) => seenLookups.current.add(`${l.id}:${l.at}`));
+      dockLookups.forEach((l) => {
+        if (allDepartmentsNotOurs(l, departments)) {
+          seenLookupNotOurs.current.add(`${l.id}:${l.at}`);
+        }
+      });
       primed.current = true;
       return;
     }
@@ -136,7 +147,22 @@ export function useAlerts({
         }
       }
     }
-  }, [orders, openLookups, role, departments, onToast]);
+
+    for (const l of dockLookups) {
+      if (!allDepartmentsNotOurs(l, departments)) continue;
+      const key = `${l.id}:${l.at}`;
+      if (seenLookupNotOurs.current.has(key)) continue;
+      seenLookupNotOurs.current.add(key);
+      if (currentRole === 'dock' || currentRole === 'admin') {
+        void SoundPatterns.dockLookup();
+        onToast(`All departments said not ours for ${l.orderId}`);
+        showBrowserNotification(
+          'Lookup result',
+          `All departments said not ours for ${l.orderId}`,
+        );
+      }
+    }
+  }, [orders, openLookups, dockLookups, role, departments, onToast]);
 
   return { waitingForUs };
 }
