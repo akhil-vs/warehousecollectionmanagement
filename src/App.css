@@ -742,6 +742,42 @@
   }
 }
 
+.collection-date-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.date-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.date-quick .btn {
+  min-height: 36px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+.date-quick .btn.active-quick {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  background: rgba(224, 160, 69, 0.18);
+}
+
+.ready-mobile-cards {
+  display: none;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.dock-card.arrived {
+  border-left-color: #c0392b;
+  background: rgba(255, 236, 230, 0.95);
+}
+
 .dock-ready-cards {
   display: none;
   flex-direction: column;
@@ -854,12 +890,18 @@
     margin-right: 1rem;
   }
 
-  .dock-ready-cards {
+  .dock-ready-cards,
+  .ready-mobile-cards {
     display: flex;
   }
 
-  .dock-ready-tables {
+  .dock-ready-tables,
+  .ready-desktop-tables {
     display: none;
+  }
+
+  .collection-date-field {
+    grid-column: 1 / -1;
   }
 
   .event-list li {

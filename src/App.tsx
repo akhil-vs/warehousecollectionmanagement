@@ -503,6 +503,7 @@ function AppShell() {
               return ok;
             }}
             onSetDepartments={(next, pin) => setDepartments(next, pin)}
+            updateReady={handleUpdateReady}
           />
         )}
       </main>
