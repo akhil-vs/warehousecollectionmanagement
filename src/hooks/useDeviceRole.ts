@@ -6,6 +6,7 @@ import {
   getBootstrapState,
   verifyAdminPin,
 } from '../lib/ordersApi';
+import { isReassignAuthValid } from '../lib/reassignAuth';
 import { SHIFT_MS } from '../lib/orderState';
 import { useNow } from './useNow';
 import { useDepartments, isDepartmentRole } from './useDepartments';
@@ -36,6 +37,7 @@ export function useDeviceRole() {
     return raw ? Number(raw) : 0;
   });
   const [pinConfigured, setPinConfigured] = useState<boolean | null>(null);
+  const [reassignAuthorizedAt, setReassignAuthorizedAt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const now = useNow(60_000);
@@ -61,6 +63,7 @@ export function useDeviceRole() {
       // Stale department assignment after config change — force reassign.
       localStorage.removeItem(ROLE_KEY);
       setRoleState(null);
+      setReassignAuthorizedAt(0);
     }
   }, [role, departments]);
 
@@ -92,43 +95,64 @@ export function useDeviceRole() {
     return now - confirmedAt > SHIFT_MS;
   }, [operator, confirmedName, confirmedAt, now]);
 
-  const assignRole = useCallback(async (nextRole: DeviceRole, pin: string) => {
-    setBusy(true);
-    setError(null);
-    try {
-      const state = await getBootstrapState();
-      if (!state.pinConfigured) {
-        const boot = await bootstrapAdminPin(pin);
-        if (!boot.ok) {
-          setError(boot.error);
+  const reassignAuthorized = isReassignAuthValid(reassignAuthorizedAt, now);
+
+  const clearRole = useCallback(() => {
+    localStorage.removeItem(ROLE_KEY);
+    setRoleState(null);
+  }, []);
+
+  const invalidateShift = useCallback(() => {
+    setConfirmedName('');
+    setConfirmedAt(0);
+    localStorage.removeItem(CONFIRMED_NAME_KEY);
+    localStorage.removeItem(CONFIRMED_AT_KEY);
+  }, []);
+
+  const assignRole = useCallback(
+    async (nextRole: DeviceRole, pin: string) => {
+      setBusy(true);
+      setError(null);
+      try {
+        const state = await getBootstrapState();
+        const authorized = isReassignAuthValid(reassignAuthorizedAt);
+
+        if (!state.pinConfigured) {
+          const boot = await bootstrapAdminPin(pin);
+          if (!boot.ok) {
+            setError(boot.error);
+            return false;
+          }
+          setPinConfigured(true);
+        } else if (!authorized) {
+          const verified = await verifyAdminPin(pin);
+          if (!verified.ok) {
+            setError(verified.error);
+            return false;
+          }
+        }
+
+        if (
+          nextRole !== 'admin' &&
+          nextRole !== 'dock' &&
+          !isDepartmentRole(nextRole, state.departments.length ? state.departments : departments)
+        ) {
+          setError('Unknown department role.');
           return false;
         }
-        setPinConfigured(true);
-      } else {
-        const verified = await verifyAdminPin(pin);
-        if (!verified.ok) {
-          setError(verified.error);
-          return false;
-        }
-      }
-      if (
-        nextRole !== 'admin' &&
-        nextRole !== 'dock' &&
-        !isDepartmentRole(nextRole, state.departments.length ? state.departments : departments)
-      ) {
-        setError('Unknown department role.');
+        localStorage.setItem(ROLE_KEY, nextRole);
+        setRoleState(nextRole);
+        setReassignAuthorizedAt(0);
+        return true;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Could not assign this device.');
         return false;
+      } finally {
+        setBusy(false);
       }
-      localStorage.setItem(ROLE_KEY, nextRole);
-      setRoleState(nextRole);
-      return true;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not assign this device.');
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  }, [departments]);
+    },
+    [departments, reassignAuthorizedAt],
+  );
 
   const changePin = useCallback(async (currentPin: string, nextPin: string) => {
     setBusy(true);
@@ -148,34 +172,36 @@ export function useDeviceRole() {
     }
   }, []);
 
-  const clearRole = useCallback(() => {
-    localStorage.removeItem(ROLE_KEY);
-    setRoleState(null);
-  }, []);
-
-  const reassignWithPin = useCallback(async (pin: string) => {
-    setBusy(true);
-    setError(null);
-    try {
-      const state = await getBootstrapState();
-      if (!state.pinConfigured) {
+  const reassignWithPin = useCallback(
+    async (pin: string) => {
+      setBusy(true);
+      setError(null);
+      try {
+        const state = await getBootstrapState();
+        if (!state.pinConfigured) {
+          clearRole();
+          invalidateShift();
+          setReassignAuthorizedAt(0);
+          return true;
+        }
+        const verified = await verifyAdminPin(pin);
+        if (!verified.ok) {
+          setError(verified.error);
+          return false;
+        }
         clearRole();
+        invalidateShift();
+        setReassignAuthorizedAt(Date.now());
         return true;
-      }
-      const verified = await verifyAdminPin(pin);
-      if (!verified.ok) {
-        setError(verified.error);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Could not reassign this device.');
         return false;
+      } finally {
+        setBusy(false);
       }
-      clearRole();
-      return true;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not reassign this device.');
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  }, [clearRole]);
+    },
+    [clearRole, invalidateShift],
+  );
 
   return {
     role,
@@ -184,6 +210,7 @@ export function useDeviceRole() {
     confirmShift,
     shiftStale,
     pinConfigured,
+    reassignAuthorized,
     busy,
     error,
     setError,
