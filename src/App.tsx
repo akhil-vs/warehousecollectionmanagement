@@ -28,6 +28,7 @@ import { useToast } from './hooks/useToast';
 import { useAlerts } from './hooks/useAlerts';
 import { ConfirmProvider, useConfirm } from './components/ConfirmDialog';
 import { RoleSetup } from './components/RoleSetup';
+import { ReassignDeviceSheet } from './components/ReassignDeviceSheet';
 import { AppHeader } from './components/AppHeader';
 import { ShiftBanner } from './components/ShiftBanner';
 import { AlertBanners } from './components/AlertBanners';
@@ -135,6 +136,7 @@ function AppShell() {
   const [prefillOrderId, setPrefillOrderId] = useState<string | undefined>();
   const [alertResetKey, setAlertResetKey] = useState(0);
   const [adminPinCache, setAdminPinCache] = useState('');
+  const [reassignOpen, setReassignOpen] = useState(false);
 
   const dockLookups = useMemo(
     () => dockRelevantLookups(data.lookups, device.departments),
@@ -258,6 +260,7 @@ function AppShell() {
     return (
       <RoleSetup
         pinConfigured={device.pinConfigured}
+        reassignAuthorized={device.reassignAuthorized}
         departments={device.departments}
         busy={device.busy}
         error={device.error}
@@ -298,14 +301,31 @@ function AppShell() {
         }}
         soundBlocked={soundBlocked && !isSoundUnlocked()}
         onUnlockSound={() => void unlockSound().then((ok) => setSoundBlocked(!ok))}
-        reassignBusy={device.busy}
-        reassignError={device.error}
-        onReassign={async (pin) => {
-          const ok = await device.reassignWithPin(pin);
-          if (ok) setAlertResetKey((k) => k + 1);
-          return ok;
+        onReassignRequest={() => {
+          device.setError(null);
+          setReassignOpen(true);
         }}
       />
+
+      {reassignOpen && (
+        <ReassignDeviceSheet
+          currentRole={role}
+          busy={device.busy}
+          error={device.error}
+          onCancel={() => {
+            setReassignOpen(false);
+            device.setError(null);
+          }}
+          onConfirm={async (pin) => {
+            const ok = await device.reassignWithPin(pin);
+            if (ok) {
+              setReassignOpen(false);
+              setAlertResetKey((k) => k + 1);
+            }
+            return ok;
+          }}
+        />
+      )}
 
       {device.shiftStale && (
         <ShiftBanner

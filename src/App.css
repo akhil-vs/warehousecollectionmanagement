@@ -162,11 +162,89 @@
   margin: 0;
 }
 
-.reassign-row {
-  display: flex;
-  flex-wrap: wrap;
+.reassign-sheet .reassign-current {
+  margin: 0 0 0.65rem;
+  color: var(--ink);
+}
+
+.reassign-impact {
+  margin: 0 0 1rem;
+  padding-left: 1.15rem;
+  color: var(--muted);
+  line-height: 1.45;
+  font-size: 0.95rem;
+}
+
+.reassign-sheet-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.reassign-sheet-form .confirm-actions {
+  margin-top: 0.25rem;
+}
+
+.auth-pill {
+  margin: 0;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid rgba(47, 107, 58, 0.35);
+  background: rgba(47, 107, 58, 0.1);
+  color: #2f6b3a;
+  border-radius: 6px;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.field-legend {
+  margin: 0 0 0.45rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.role-targets {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.role-target-grid {
+  display: grid;
   gap: 0.5rem;
-  align-items: flex-end;
+}
+
+.role-target {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 48px;
+  width: 100%;
+  padding: 0.7rem 0.85rem;
+  text-align: left;
+  font: inherit;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.role-target .wh-icon {
+  font-size: 1.2rem;
+  color: var(--accent-ink);
+  flex: 0 0 auto;
+}
+
+.role-target.active {
+  border-color: var(--accent);
+  background: rgba(224, 160, 69, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(224, 160, 69, 0.35);
+}
+
+.role-target:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .shift-banner {
@@ -1166,8 +1244,7 @@
   }
 
   .header-actions .btn,
-  .header-actions .operator-field,
-  .header-actions .reassign-row {
+  .header-actions .operator-field {
     width: 100%;
   }
 
@@ -1175,9 +1252,15 @@
     max-width: none;
   }
 
-  .reassign-row {
-    display: grid;
-    grid-template-columns: 1fr;
+  .reassign-backdrop {
+    align-items: flex-end;
+  }
+
+  .confirm-dialog.reassign-sheet {
+    width: min(28rem, 100%);
+    margin-bottom: 0;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
   }
 
   .tabs {
