@@ -21,6 +21,8 @@ export {
   dockRelevantLookups,
   withLookupResponse,
   resolvePalletCount,
+  JIRA_TICKET_ERROR,
   normalizeJiraTicket,
+  parseJiraTicket,
   readyEditNote,
 } from '../../shared/orderState';

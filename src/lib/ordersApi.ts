@@ -41,6 +41,7 @@ import {
   isKnownDepartment,
   resolvePalletCount,
   normalizeJiraTicket,
+  parseJiraTicket,
   readyEditNote,
   toUserError,
   withLookupResponse,
@@ -66,7 +67,9 @@ function mapOrder(id: string, data: Record<string, unknown>): Order {
     pallets: Number(data.pallets),
     bay: (data.bay as string | undefined) || undefined,
     jiraTicket: normalizeJiraTicket(
-      typeof data.jiraTicket === 'string' ? data.jiraTicket : undefined,
+      typeof data.jiraTicket === 'string' || typeof data.jiraTicket === 'number'
+        ? data.jiraTicket
+        : undefined,
     ),
     department: String(data.department),
     collectionDate: parseDateInput(
@@ -305,7 +308,9 @@ export async function markOrderReady(input: {
   if (!input.operator.trim()) return { ok: false, error: 'Enter your name at the top.' };
   const collection = resolveCollectionDate(input.collectionDate);
   if (!collection.ok) return collection;
-  const jiraTicket = normalizeJiraTicket(input.jiraTicket);
+  const jira = parseJiraTicket(input.jiraTicket);
+  if (!jira.ok) return jira;
+  const jiraTicket = jira.ticket;
 
   if (!isFirebaseConfigured()) {
     const departments = demoGetDepartments();
@@ -336,7 +341,7 @@ export async function markOrderReady(input: {
     orderId: id,
     pallets: input.pallets,
     bay: input.bay,
-    jiraTicket: input.jiraTicket,
+    jiraTicket,
     collectionDate: input.collectionDate,
     department: input.department,
     operator: input.operator,
@@ -356,7 +361,9 @@ export async function updateReadyOrder(
   const collection = resolveCollectionDate(patch.collectionDate);
   if (!collection.ok) return collection;
   const bay = patch.bay?.trim() || undefined;
-  const jiraTicket = normalizeJiraTicket(patch.jiraTicket);
+  const jira = parseJiraTicket(patch.jiraTicket);
+  if (!jira.ok) return jira;
+  const jiraTicket = jira.ticket;
 
   if (!isFirebaseConfigured()) {
     const existing = demoGetOrders().find((o) => o.id === order.id);

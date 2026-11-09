@@ -149,11 +149,35 @@ export function resolvePalletCount(pallets: number | undefined): number {
   return Math.floor(pallets);
 }
 
-/** Trim + uppercase Jira keys (e.g. `proj-12` → `PROJ-12`). Empty → undefined. */
-export function normalizeJiraTicket(value: string | undefined): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  const trimmed = value.trim().toUpperCase();
-  return trimmed || undefined;
+export const JIRA_TICKET_ERROR =
+  'Jira ticket must be COPS- followed by 6 digits (e.g. COPS-123456).';
+
+/**
+ * Canonical `COPS-######` key. Accepts `123456`, `COPS123456`, `cops-123456`,
+ * and extra spaces/punctuation. Empty → undefined. Invalid → undefined.
+ */
+export function normalizeJiraTicket(
+  value: string | number | undefined | null,
+): string | undefined {
+  if (value == null) return undefined;
+  const raw = String(value).trim();
+  if (!raw) return undefined;
+  const compact = raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const match = compact.match(/^(?:COPS)?(\d{6})$/);
+  if (!match) return undefined;
+  return `COPS-${match[1]}`;
+}
+
+/** Optional field: empty is OK; non-empty must be a COPS-###### key. */
+export function parseJiraTicket(
+  value: string | number | undefined | null,
+): { ok: true; ticket?: string } | { ok: false; error: string } {
+  if (value == null) return { ok: true };
+  const raw = String(value);
+  if (!raw.trim()) return { ok: true };
+  const ticket = normalizeJiraTicket(raw);
+  if (!ticket) return { ok: false, error: JIRA_TICKET_ERROR };
+  return { ok: true, ticket };
 }
 
 export function readyEditNote(

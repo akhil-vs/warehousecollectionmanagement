@@ -33,7 +33,7 @@ export interface Order {
   status: OrderStatus;
   pallets: number;
   bay?: string;
-  /** Optional Jira issue key linked when the order was marked ready. */
+  /** Optional COPS-###### Jira key linked when the order was marked ready. */
   jiraTicket?: string;
   department: Department;
   collectionDate?: string;
