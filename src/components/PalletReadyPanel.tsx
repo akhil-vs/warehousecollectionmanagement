@@ -21,6 +21,7 @@ import {
 import { CollectionDateTables } from './CollectionDateTables';
 import { CollectionDateField } from './CollectionDateField';
 import { JiraTicketField } from './JiraTicketField';
+import { JiraTicketText } from './JiraTicketText';
 import {
   IconBarcode,
   IconBay,
@@ -351,9 +352,9 @@ export function PalletReadyPanel({
           <h2>Pallet ready</h2>
         </div>
         <p>
-          Mark orders ready with optional pallets, bay, Jira ticket (COPS- plus 6 digits), and
-          collection date. Use <strong>Edit</strong> on any ready row to change those fields
-          before the driver arrives.
+          Mark orders ready with optional pallets, bay, Jira ticket number, and collection date.
+          Use <strong>Edit</strong> on any ready row to change those fields before the driver
+          arrives.
         </p>
       </div>
 
@@ -439,9 +440,9 @@ export function PalletReadyPanel({
               <div className="dock-card-main">
                 <span className="mono order-id">{order.id}</span>
                 <span className={`status-pill ${order.status}`}>{statusLabel(order.status)}</span>
+                <JiraTicketText value={order.jiraTicket} fallback={false} />
                 <span>
                   {order.pallets} plt{order.bay ? ` · Bay ${order.bay}` : ''}
-                  {order.jiraTicket ? ` · ${order.jiraTicket}` : ''}
                   {role === 'admin' ? ` · ${order.department}` : ''}
                 </span>
                 <span className="muted">
@@ -478,10 +479,10 @@ export function PalletReadyPanel({
           headers={
             <>
               <th>Order</th>
+              <th>Jira</th>
               <th>Status</th>
               <th>Pallets</th>
               <th>Bay</th>
-              <th>Jira</th>
               <th>Collect</th>
               {role === 'admin' && <th>Dept</th>}
               <th>Ready</th>
@@ -507,14 +508,14 @@ export function PalletReadyPanel({
                 >
                   <td className="mono">{order.id}</td>
                   <td>
+                    <JiraTicketText value={order.jiraTicket} />
+                  </td>
+                  <td>
                     <span className={`status-pill ${order.status}`}>{statusLabel(order.status)}</span>
                     {order.door ? <span className="muted"> · Door {order.door}</span> : null}
                   </td>
                   <td>{order.pallets}</td>
                   <td>{order.bay || <span className="muted">—</span>}</td>
-                  <td className="mono">
-                    {order.jiraTicket || <span className="muted">—</span>}
-                  </td>
                   <td>
                     {collectionDateLabel(order.collectionDate, now) || (
                       <span className="muted">—</span>

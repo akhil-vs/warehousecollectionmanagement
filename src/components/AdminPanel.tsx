@@ -11,6 +11,7 @@ import {
 import { canEditReady, STALE_WAIT_MS } from '../lib/orderState';
 import { useNow } from '../hooks/useNow';
 import { CollectionDateTables } from './CollectionDateTables';
+import { JiraTicketText } from './JiraTicketText';
 import { useConfirm } from './ConfirmDialog';
 import { ReadyOrderEditForm, type ReadyOrderPatch } from './PalletReadyPanel';
 import {
@@ -376,10 +377,10 @@ export function AdminPanel({
         headers={
           <>
             <th>Order</th>
+            <th>Jira</th>
             <th>Status</th>
             <th>Pallets</th>
             <th>Bay</th>
-            <th>Jira</th>
             <th>Collect</th>
             <th>Dept</th>
             <th>Ready</th>
@@ -397,9 +398,9 @@ export function AdminPanel({
               <div className="dock-card-main">
                 <span className="mono order-id">{o.id}</span>
                 <span className={`status-pill ${o.status}`}>{statusLabel(o.status)}</span>
+                <JiraTicketText value={o.jiraTicket} fallback={false} />
                 <span>
-                  {o.pallets} plt{o.bay ? ` · Bay ${o.bay}` : ''}
-                  {o.jiraTicket ? ` · ${o.jiraTicket}` : ''} · {o.department}
+                  {o.pallets} plt{o.bay ? ` · Bay ${o.bay}` : ''} · {o.department}
                 </span>
                 <span className="muted">
                   {collectionDateLabel(o.collectionDate, now) ?? 'No collection date'}
@@ -464,11 +465,13 @@ export function AdminPanel({
               >
                 <td className="mono">{o.id}</td>
                 <td>
+                  <JiraTicketText value={o.jiraTicket} />
+                </td>
+                <td>
                   <span className={`status-pill ${o.status}`}>{statusLabel(o.status)}</span>
                 </td>
                 <td>{o.pallets}</td>
                 <td>{o.bay || <span className="muted">—</span>}</td>
-                <td className="mono">{o.jiraTicket || <span className="muted">—</span>}</td>
                 <td>
                   {collectionDateLabel(o.collectionDate, now) || <span className="muted">—</span>}
                 </td>

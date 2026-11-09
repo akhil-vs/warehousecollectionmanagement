@@ -149,12 +149,19 @@ export function resolvePalletCount(pallets: number | undefined): number {
   return Math.floor(pallets);
 }
 
+export const JIRA_PROJECT_KEY = 'COPS';
+export const JIRA_TICKET_MAX_DIGITS = 10;
 export const JIRA_TICKET_ERROR =
-  'Jira ticket must be COPS- followed by 6 digits (e.g. COPS-123456).';
+  'Enter a Jira ticket number. It is saved as COPS- followed by the number.';
+
+const COPS_IN_TEXT = /COPS\s*-?\s*(\d{1,10})/;
+const BARE_TICKET_NUMBER = /^(\d{1,10})$/;
 
 /**
- * Canonical `COPS-######` key. Accepts `123456`, `COPS123456`, `cops-123456`,
- * and extra spaces/punctuation. Empty → undefined. Invalid → undefined.
+ * Canonical `COPS-{number}` key.
+ * Accepts a bare ticket number (`1234`, `123456`), `COPS-1234`, `cops1234`,
+ * pasted browse URLs, and barcode preambles that contain `COPS-1234`.
+ * Empty → undefined. Invalid → undefined.
  */
 export function normalizeJiraTicket(
   value: string | number | undefined | null,
@@ -162,13 +169,38 @@ export function normalizeJiraTicket(
   if (value == null) return undefined;
   const raw = String(value).trim();
   if (!raw) return undefined;
-  const compact = raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const match = compact.match(/^(?:COPS)?(\d{6})$/);
-  if (!match) return undefined;
-  return `COPS-${match[1]}`;
+  const upper = raw.toUpperCase();
+  const prefixed = upper.match(COPS_IN_TEXT);
+  if (prefixed?.[1]) return `${JIRA_PROJECT_KEY}-${prefixed[1]}`;
+  const compact = upper.replace(/[^A-Z0-9]/g, '');
+  const digitsOnly = compact.match(BARE_TICKET_NUMBER);
+  if (digitsOnly?.[1]) return `${JIRA_PROJECT_KEY}-${digitsOnly[1]}`;
+  return undefined;
 }
 
-/** Optional field: empty is OK; non-empty must be a COPS-###### key. */
+/** Digits shown in the ticket-number input (`COPS-1234` → `1234`). */
+export function jiraTicketDigits(value: string): string {
+  const canonical = normalizeJiraTicket(value);
+  if (canonical) return canonical.slice(JIRA_PROJECT_KEY.length + 1);
+  return value.replace(/\D/g, '').slice(0, JIRA_TICKET_MAX_DIGITS);
+}
+
+/**
+ * Value to show in lists/tables. Canonicalize when possible, otherwise keep
+ * the stored string so a saved ticket is never blanked out on read.
+ */
+export function readJiraTicket(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return normalizeJiraTicket(value) ?? String(value);
+  }
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return normalizeJiraTicket(trimmed) ?? trimmed;
+}
+
+/** Optional field: empty is OK; non-empty must be a COPS ticket number. */
 export function parseJiraTicket(
   value: string | number | undefined | null,
 ): { ok: true; ticket?: string } | { ok: false; error: string } {

@@ -21,8 +21,12 @@ export {
   dockRelevantLookups,
   withLookupResponse,
   resolvePalletCount,
+  JIRA_PROJECT_KEY,
+  JIRA_TICKET_MAX_DIGITS,
   JIRA_TICKET_ERROR,
   normalizeJiraTicket,
+  jiraTicketDigits,
+  readJiraTicket,
   parseJiraTicket,
   readyEditNote,
 } from '../../shared/orderState';

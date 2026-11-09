@@ -58,7 +58,7 @@ export function AlertBanners({
               {order.jiraTicket ? (
                 <>
                   {' · '}
-                  <span className="mono">{order.jiraTicket}</span>
+                  <span className="mono jira-ticket">{order.jiraTicket}</span>
                 </>
               ) : null}
               {order.door ? ` · Door ${order.door}` : ''}

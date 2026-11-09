@@ -1,4 +1,8 @@
-import { normalizeJiraTicket } from '../lib/orderState';
+import {
+  JIRA_PROJECT_KEY,
+  JIRA_TICKET_MAX_DIGITS,
+  jiraTicketDigits,
+} from '../lib/orderState';
 import { IconTicket } from './Icons';
 
 interface Props {
@@ -7,32 +11,43 @@ interface Props {
   id?: string;
 }
 
-/** Optional COPS-###### Jira key. Canonicalizes on blur (e.g. `123456` → `COPS-123456`). */
+/**
+ * Optional Jira ticket number. Operators type digits only; `COPS-` is prefixed
+ * automatically (`1234` → `COPS-1234`).
+ */
 export function JiraTicketField({ value, onChange, id }: Props) {
+  const digits = jiraTicketDigits(value);
+  const hintId = id ? `${id}-hint` : 'jira-ticket-hint';
+
   return (
     <label className="field">
       <span className="icon-label">
         <IconTicket />
-        Jira ticket (optional)
+        Jira ticket number (optional)
       </span>
-      <input
-        id={id}
-        className="mono"
-        value={value}
-        onChange={(e) => onChange(e.target.value.toUpperCase())}
-        onBlur={() => {
-          const canonical = normalizeJiraTicket(value);
-          if (canonical && canonical !== value) onChange(canonical);
-        }}
-        placeholder="COPS-123456"
-        autoComplete="off"
-        spellCheck={false}
-        maxLength={20}
-        inputMode="text"
-        aria-describedby={id ? `${id}-hint` : 'jira-ticket-hint'}
-      />
-      <span id={id ? `${id}-hint` : 'jira-ticket-hint'} className="field-hint">
-        Format: COPS- then 6 digits
+      <div className="jira-ticket-input">
+        <span className="jira-prefix" aria-hidden="true">
+          {JIRA_PROJECT_KEY}-
+        </span>
+        <input
+          id={id}
+          className="mono"
+          value={digits}
+          onChange={(e) => {
+            const next = e.target.value.replace(/\D/g, '').slice(0, JIRA_TICKET_MAX_DIGITS);
+            onChange(next ? `${JIRA_PROJECT_KEY}-${next}` : '');
+          }}
+          placeholder="123456"
+          autoComplete="off"
+          spellCheck={false}
+          inputMode="numeric"
+          pattern="[0-9]*"
+          maxLength={JIRA_TICKET_MAX_DIGITS}
+          aria-describedby={hintId}
+        />
+      </div>
+      <span id={hintId} className="field-hint">
+        Type the ticket number. COPS- is added automatically.
       </span>
     </label>
   );

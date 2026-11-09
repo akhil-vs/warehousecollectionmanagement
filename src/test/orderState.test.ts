@@ -10,6 +10,8 @@ import {
   normalizeDepartments,
   JIRA_TICKET_ERROR,
   normalizeJiraTicket,
+  jiraTicketDigits,
+  readJiraTicket,
   parseJiraTicket,
   readyEditNote,
   withLookupResponse,
@@ -110,25 +112,51 @@ describe('normalizeDepartments', () => {
 });
 
 describe('normalizeJiraTicket', () => {
-  it('canonicalizes COPS- plus 6 digits and drops blanks or invalid keys', () => {
+  it('canonicalizes a COPS ticket number of any typical length', () => {
     expect(normalizeJiraTicket(undefined)).toBeUndefined();
     expect(normalizeJiraTicket('')).toBeUndefined();
     expect(normalizeJiraTicket('  ')).toBeUndefined();
-    expect(normalizeJiraTicket(' cops-123456 ')).toBe('COPS-123456');
-    expect(normalizeJiraTicket('COPS123456')).toBe('COPS-123456');
+    expect(normalizeJiraTicket('4')).toBe('COPS-4');
+    expect(normalizeJiraTicket('1234')).toBe('COPS-1234');
+    expect(normalizeJiraTicket(' cops-99 ')).toBe('COPS-99');
+    expect(normalizeJiraTicket('COPS12345')).toBe('COPS-12345');
     expect(normalizeJiraTicket('123456')).toBe('COPS-123456');
     expect(normalizeJiraTicket(123456)).toBe('COPS-123456');
+    expect(normalizeJiraTicket('COPS-1234567')).toBe('COPS-1234567');
+    expect(normalizeJiraTicket('https://jira.example/browse/COPS-88')).toBe('COPS-88');
+    expect(normalizeJiraTicket(']C106COPS-123456')).toBe('COPS-123456');
     expect(normalizeJiraTicket('PROJ-12')).toBeUndefined();
-    expect(normalizeJiraTicket('COPS-12345')).toBeUndefined();
-    expect(normalizeJiraTicket('COPS-1234567')).toBeUndefined();
+    expect(normalizeJiraTicket('COPS')).toBeUndefined();
+    expect(normalizeJiraTicket('12345678901')).toBeUndefined();
+  });
+});
+
+describe('jiraTicketDigits', () => {
+  it('shows only the ticket number in the input', () => {
+    expect(jiraTicketDigits('')).toBe('');
+    expect(jiraTicketDigits('1234')).toBe('1234');
+    expect(jiraTicketDigits('COPS-99')).toBe('99');
+    expect(jiraTicketDigits('abc')).toBe('');
+  });
+});
+
+describe('readJiraTicket', () => {
+  it('canonicalizes COPS numbers and still displays leftover stored values', () => {
+    expect(readJiraTicket(undefined)).toBeUndefined();
+    expect(readJiraTicket('')).toBeUndefined();
+    expect(readJiraTicket('  ')).toBeUndefined();
+    expect(readJiraTicket('1234')).toBe('COPS-1234');
+    expect(readJiraTicket(88)).toBe('COPS-88');
+    expect(readJiraTicket('COPS-12')).toBe('COPS-12');
+    expect(readJiraTicket('WH-99')).toBe('WH-99');
   });
 });
 
 describe('parseJiraTicket', () => {
-  it('treats empty as optional and rejects invalid keys', () => {
+  it('treats empty as optional and rejects non-numeric keys', () => {
     expect(parseJiraTicket(undefined)).toEqual({ ok: true });
     expect(parseJiraTicket('')).toEqual({ ok: true });
-    expect(parseJiraTicket('123456')).toEqual({ ok: true, ticket: 'COPS-123456' });
+    expect(parseJiraTicket('1234')).toEqual({ ok: true, ticket: 'COPS-1234' });
     expect(parseJiraTicket('PROJ-12')).toEqual({ ok: false, error: JIRA_TICKET_ERROR });
   });
 });
