@@ -9,6 +9,7 @@ import {
 import { isDepartmentRole } from '../hooks/useDeviceRole';
 import { useNow } from '../hooks/useNow';
 import { CollectionDateTables } from './CollectionDateTables';
+import { JiraTicketText } from './JiraTicketText';
 import { IconActivity, IconHistory, IconSearch } from './Icons';
 
 interface Props {
@@ -145,10 +146,10 @@ export function HistoryPanel({ role, departments, orders, events }: Props) {
         headers={
           <>
             <th>Order</th>
+            <th>Jira</th>
             <th>Status</th>
             <th>Pallets</th>
             <th>Bay</th>
-            <th>Jira</th>
             <th>Dept</th>
             <th>Ready</th>
             <th>Driver / collected</th>
@@ -159,9 +160,9 @@ export function HistoryPanel({ role, departments, orders, events }: Props) {
             <div className="dock-card-main">
               <span className="mono order-id">{o.id}</span>
               <span className={`status-pill ${o.status}`}>{statusLabel(o.status)}</span>
+              <JiraTicketText value={o.jiraTicket} fallback={false} />
               <span>
-                {o.pallets} plt{o.bay ? ` · Bay ${o.bay}` : ''}
-                {o.jiraTicket ? ` · ${o.jiraTicket}` : ''} · {o.department}
+                {o.pallets} plt{o.bay ? ` · Bay ${o.bay}` : ''} · {o.department}
               </span>
               <span className="muted">
                 {collectionDateLabel(o.collectionDate, now) ?? 'No collection date'}
@@ -191,10 +192,12 @@ export function HistoryPanel({ role, departments, orders, events }: Props) {
         renderRow={(o) => (
           <tr key={o.id}>
             <td className="mono">{o.id}</td>
+            <td>
+              <JiraTicketText value={o.jiraTicket} />
+            </td>
             <td>{statusLabel(o.status)}</td>
             <td>{o.pallets}</td>
             <td>{o.bay || <span className="muted">—</span>}</td>
-            <td className="mono">{o.jiraTicket || <span className="muted">—</span>}</td>
             <td>{o.department}</td>
             <td>
               {o.readyBy}

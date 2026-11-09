@@ -409,6 +409,47 @@
   color: var(--muted);
 }
 
+.jira-ticket-input {
+  display: flex;
+  align-items: stretch;
+  min-height: 44px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.jira-ticket-input:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.jira-prefix {
+  display: flex;
+  align-items: center;
+  padding: 0 0.55rem 0 0.75rem;
+  background: #f3efe6;
+  border-right: 1px solid var(--line-strong);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+}
+
+.field .jira-ticket-input input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+}
+
+.field .jira-ticket-input input:focus-visible {
+  outline: none;
+}
+
 .ready-edit-form {
   flex: 1 1 100%;
   display: grid;
@@ -648,6 +689,12 @@
 .mono {
   font-family: var(--font-mono);
   letter-spacing: 0.02em;
+}
+
+.jira-ticket {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .empty {

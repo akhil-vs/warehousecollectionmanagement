@@ -9,7 +9,7 @@ import {
   normalizeDepartments,
   isKnownDepartment,
   resolvePalletCount,
-  normalizeJiraTicket,
+  readJiraTicket,
   parseJiraTicket,
   readyEditNote,
   withLookupResponse,
@@ -53,11 +53,7 @@ function mapOrder(id: string, data: DocumentData): Order {
     status: data.status as OrderStatus,
     pallets: Number(data.pallets),
     bay: data.bay ? String(data.bay) : undefined,
-    jiraTicket: normalizeJiraTicket(
-      typeof data.jiraTicket === 'string' || typeof data.jiraTicket === 'number'
-        ? data.jiraTicket
-        : undefined,
-    ),
+    jiraTicket: readJiraTicket(data.jiraTicket),
     department: String(data.department),
     collectionDate: parseDateInput(
       typeof data.collectionDate === 'string' ? data.collectionDate : undefined,

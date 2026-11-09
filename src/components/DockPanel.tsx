@@ -5,6 +5,7 @@ import { formatDwell, formatTime, isCollectionOverdue, isStaleWait } from '../li
 import { allDepartmentsNotOurs, lookupDockStatusLabel } from '../lib/orderState';
 import { useNow } from '../hooks/useNow';
 import { CollectionDateTables } from './CollectionDateTables';
+import { JiraTicketText } from './JiraTicketText';
 import {
   IconAlert,
   IconBarcode,
@@ -198,9 +199,11 @@ export function DockPanel({
             >
               <div className="dock-card-main">
                 <span className="mono order-id">{order.id}</span>
+                <JiraTicketText value={order.jiraTicket} fallback={false} />
                 <span>
                   {order.pallets} plt{order.bay ? ` · Bay ${order.bay}` : ''}
-                  {order.jiraTicket ? ` · ${order.jiraTicket}` : ''} · {order.department}
+                  {' · '}
+                  {order.department}
                 </span>
                 <span className="muted">
                   {order.readyBy} · {formatTime(order.readyAt)} · ready{' '}
@@ -224,9 +227,9 @@ export function DockPanel({
           headers={
             <>
               <th>Order</th>
+              <th>Jira</th>
               <th>Pallets</th>
               <th>Bay</th>
-              <th>Jira</th>
               <th>Dept</th>
               <th>Ready</th>
               <th>Actions</th>
@@ -238,11 +241,11 @@ export function DockPanel({
             return (
               <tr key={order.id} className={stale ? 'stale' : undefined}>
                 <td className="mono">{order.id}</td>
+                <td>
+                  <JiraTicketText value={order.jiraTicket} />
+                </td>
                 <td>{order.pallets}</td>
                 <td>{order.bay || <span className="muted">—</span>}</td>
-                <td className="mono">
-                  {order.jiraTicket || <span className="muted">—</span>}
-                </td>
                 <td>{order.department}</td>
                 <td>
                   {order.readyBy}
