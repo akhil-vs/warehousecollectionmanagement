@@ -401,6 +401,14 @@
   color: var(--ink);
 }
 
+.field-hint {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
 .ready-edit-form {
   flex: 1 1 100%;
   display: grid;

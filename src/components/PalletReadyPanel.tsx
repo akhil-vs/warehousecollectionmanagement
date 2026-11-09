@@ -11,9 +11,16 @@ import {
 } from '../lib/format';
 import { isDepartmentRole } from '../hooks/useDeviceRole';
 import { useNow } from '../hooks/useNow';
-import { canAcknowledge, canCancelReady, canConfirmHandover, canEditReady } from '../lib/orderState';
+import {
+  canAcknowledge,
+  canCancelReady,
+  canConfirmHandover,
+  canEditReady,
+  parseJiraTicket,
+} from '../lib/orderState';
 import { CollectionDateTables } from './CollectionDateTables';
 import { CollectionDateField } from './CollectionDateField';
+import { JiraTicketField } from './JiraTicketField';
 import {
   IconBarcode,
   IconBay,
@@ -22,7 +29,6 @@ import {
   IconDept,
   IconEdit,
   IconPallet,
-  IconTicket,
 } from './Icons';
 
 export interface ReadyOrderPatch {
@@ -64,12 +70,14 @@ export function ReadyOrderEditForm({
   error,
   onSave,
   onCancel,
+  jiraFieldId,
 }: {
   order: Order;
   busy: boolean;
   error: string | null;
   onSave: (patch: ReadyOrderPatch) => Promise<boolean>;
   onCancel: () => void;
+  jiraFieldId?: string;
 }) {
   const [pallets, setPallets] = useState(String(order.pallets));
   const [bay, setBay] = useState(order.bay ?? '');
@@ -84,11 +92,16 @@ export function ReadyOrderEditForm({
       setLocalError('Pallet count must be at least 1.');
       return;
     }
+    const jira = parseJiraTicket(jiraTicket);
+    if (!jira.ok) {
+      setLocalError(jira.error);
+      return;
+    }
     setLocalError(null);
     await onSave({
       pallets: Math.floor(n),
       bay: bay.trim() || undefined,
-      jiraTicket: jiraTicket.trim() || undefined,
+      jiraTicket: jira.ticket,
       collectionDate: collectionDate.trim() || undefined,
     });
   }
@@ -116,20 +129,11 @@ export function ReadyOrderEditForm({
         </span>
         <input value={bay} onChange={(e) => setBay(e.target.value)} />
       </label>
-      <label className="field">
-        <span className="icon-label">
-          <IconTicket />
-          Jira ticket (optional)
-        </span>
-        <input
-          className="mono"
-          value={jiraTicket}
-          onChange={(e) => setJiraTicket(e.target.value.toUpperCase())}
-          placeholder="PROJ-123"
-          autoComplete="off"
-          spellCheck={false}
-        />
-      </label>
+      <JiraTicketField
+        value={jiraTicket}
+        onChange={setJiraTicket}
+        id={jiraFieldId ?? `ready-edit-jira-${order.id}`}
+      />
       <CollectionDateField value={collectionDate} onChange={setCollectionDate} optional={false} />
       <div className="row-actions">
         <button type="submit" className="btn primary" disabled={busy}>
@@ -242,6 +246,11 @@ export function PalletReadyPanel({
       setError('Enter an order ID.');
       return;
     }
+    const jira = parseJiraTicket(jiraTicket);
+    if (!jira.ok) {
+      setError(jira.error);
+      return;
+    }
     busyRef.current = true;
     setBusy(true);
     setError(null);
@@ -249,7 +258,7 @@ export function PalletReadyPanel({
       orderId: id,
       pallets: parsedPallets(),
       bay: bay || undefined,
-      jiraTicket: jiraTicket || undefined,
+      jiraTicket: jira.ticket,
       collectionDate: collectionDate || undefined,
       department: role === 'admin' ? department : deptDefault,
       operator,
@@ -342,8 +351,9 @@ export function PalletReadyPanel({
           <h2>Pallet ready</h2>
         </div>
         <p>
-          Mark orders ready with optional pallets, bay, Jira ticket, and collection date. Use{' '}
-          <strong>Edit</strong> on any ready row to change those fields before the driver arrives.
+          Mark orders ready with optional pallets, bay, Jira ticket (COPS- plus 6 digits), and
+          collection date. Use <strong>Edit</strong> on any ready row to change those fields
+          before the driver arrives.
         </p>
       </div>
 
@@ -384,20 +394,7 @@ export function PalletReadyPanel({
           </span>
           <input value={bay} onChange={(e) => setBay(e.target.value)} />
         </label>
-        <label className="field">
-          <span className="icon-label">
-            <IconTicket />
-            Jira ticket (optional)
-          </span>
-          <input
-            className="mono"
-            value={jiraTicket}
-            onChange={(e) => setJiraTicket(e.target.value.toUpperCase())}
-            placeholder="PROJ-123"
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </label>
+        <JiraTicketField value={jiraTicket} onChange={setJiraTicket} id="mark-ready-jira" />
         <CollectionDateField value={collectionDate} onChange={setCollectionDate} />
         {role === 'admin' && (
           <label className="field">
@@ -458,6 +455,7 @@ export function PalletReadyPanel({
                   order={order}
                   busy={editBusy}
                   error={editError}
+                  jiraFieldId={`ready-edit-jira-mobile-${order.id}`}
                   onSave={(patch) => saveEdit(order, patch)}
                   onCancel={() => {
                     setEditingId(null);
@@ -542,6 +540,7 @@ export function PalletReadyPanel({
                         order={order}
                         busy={editBusy}
                         error={editError}
+                        jiraFieldId={`ready-edit-jira-desktop-${order.id}`}
                         onSave={(patch) => saveEdit(order, patch)}
                         onCancel={() => {
                           setEditingId(null);

@@ -8,7 +8,9 @@ import {
   lookupDockStatusLabel,
   markReadyConflict,
   normalizeDepartments,
+  JIRA_TICKET_ERROR,
   normalizeJiraTicket,
+  parseJiraTicket,
   readyEditNote,
   withLookupResponse,
 } from '../../shared/orderState';
@@ -108,11 +110,26 @@ describe('normalizeDepartments', () => {
 });
 
 describe('normalizeJiraTicket', () => {
-  it('trims, uppercases, and drops blanks', () => {
+  it('canonicalizes COPS- plus 6 digits and drops blanks or invalid keys', () => {
     expect(normalizeJiraTicket(undefined)).toBeUndefined();
     expect(normalizeJiraTicket('')).toBeUndefined();
     expect(normalizeJiraTicket('  ')).toBeUndefined();
-    expect(normalizeJiraTicket(' proj-12 ')).toBe('PROJ-12');
+    expect(normalizeJiraTicket(' cops-123456 ')).toBe('COPS-123456');
+    expect(normalizeJiraTicket('COPS123456')).toBe('COPS-123456');
+    expect(normalizeJiraTicket('123456')).toBe('COPS-123456');
+    expect(normalizeJiraTicket(123456)).toBe('COPS-123456');
+    expect(normalizeJiraTicket('PROJ-12')).toBeUndefined();
+    expect(normalizeJiraTicket('COPS-12345')).toBeUndefined();
+    expect(normalizeJiraTicket('COPS-1234567')).toBeUndefined();
+  });
+});
+
+describe('parseJiraTicket', () => {
+  it('treats empty as optional and rejects invalid keys', () => {
+    expect(parseJiraTicket(undefined)).toEqual({ ok: true });
+    expect(parseJiraTicket('')).toEqual({ ok: true });
+    expect(parseJiraTicket('123456')).toEqual({ ok: true, ticket: 'COPS-123456' });
+    expect(parseJiraTicket('PROJ-12')).toEqual({ ok: false, error: JIRA_TICKET_ERROR });
   });
 });
 

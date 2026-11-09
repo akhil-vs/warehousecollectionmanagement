@@ -10,6 +10,7 @@ import {
   isKnownDepartment,
   resolvePalletCount,
   normalizeJiraTicket,
+  parseJiraTicket,
   readyEditNote,
   withLookupResponse,
   toUserError,
@@ -53,7 +54,9 @@ function mapOrder(id: string, data: DocumentData): Order {
     pallets: Number(data.pallets),
     bay: data.bay ? String(data.bay) : undefined,
     jiraTicket: normalizeJiraTicket(
-      typeof data.jiraTicket === 'string' ? data.jiraTicket : undefined,
+      typeof data.jiraTicket === 'string' || typeof data.jiraTicket === 'number'
+        ? data.jiraTicket
+        : undefined,
     ),
     department: String(data.department),
     collectionDate: parseDateInput(
@@ -231,9 +234,13 @@ export const markOrderReady = onCall(async (request) => {
       return fail('Enter a valid collection date.');
     }
     const bay = typeof data.bay === 'string' && data.bay.trim() ? data.bay.trim() : undefined;
-    const jiraTicket = normalizeJiraTicket(
-      typeof data.jiraTicket === 'string' ? data.jiraTicket : undefined,
+    const jira = parseJiraTicket(
+      typeof data.jiraTicket === 'string' || typeof data.jiraTicket === 'number'
+        ? data.jiraTicket
+        : undefined,
     );
+    if (!jira.ok) return fail(jira.error);
+    const jiraTicket = jira.ticket;
 
     await db.runTransaction(async (tx) => {
       const ref = db.collection('orders').doc(id);
@@ -276,9 +283,13 @@ export const updateReadyOrder = onCall(async (request) => {
       return fail('Enter a valid collection date.');
     }
     const bay = typeof data.bay === 'string' && data.bay.trim() ? data.bay.trim() : undefined;
-    const jiraTicket = normalizeJiraTicket(
-      typeof data.jiraTicket === 'string' ? data.jiraTicket : undefined,
+    const jira = parseJiraTicket(
+      typeof data.jiraTicket === 'string' || typeof data.jiraTicket === 'number'
+        ? data.jiraTicket
+        : undefined,
     );
+    if (!jira.ok) return fail(jira.error);
+    const jiraTicket = jira.ticket;
     const note = readyEditNote(floor, bay, collectionDate, jiraTicket);
     let department: Department = '';
 
