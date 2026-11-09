@@ -9,6 +9,7 @@ import {
   normalizeDepartments,
   isKnownDepartment,
   resolvePalletCount,
+  normalizeJiraTicket,
   readyEditNote,
   withLookupResponse,
   toUserError,
@@ -51,6 +52,9 @@ function mapOrder(id: string, data: DocumentData): Order {
     status: data.status as OrderStatus,
     pallets: Number(data.pallets),
     bay: data.bay ? String(data.bay) : undefined,
+    jiraTicket: normalizeJiraTicket(
+      typeof data.jiraTicket === 'string' ? data.jiraTicket : undefined,
+    ),
     department: String(data.department),
     collectionDate: parseDateInput(
       typeof data.collectionDate === 'string' ? data.collectionDate : undefined,
@@ -227,6 +231,9 @@ export const markOrderReady = onCall(async (request) => {
       return fail('Enter a valid collection date.');
     }
     const bay = typeof data.bay === 'string' && data.bay.trim() ? data.bay.trim() : undefined;
+    const jiraTicket = normalizeJiraTicket(
+      typeof data.jiraTicket === 'string' ? data.jiraTicket : undefined,
+    );
 
     await db.runTransaction(async (tx) => {
       const ref = db.collection('orders').doc(id);
@@ -238,6 +245,7 @@ export const markOrderReady = onCall(async (request) => {
         status: 'ready',
         pallets,
         bay: bay || null,
+        jiraTicket: jiraTicket || null,
         collectionDate: collectionDate || null,
         department,
         readyBy: operator,
@@ -268,7 +276,10 @@ export const updateReadyOrder = onCall(async (request) => {
       return fail('Enter a valid collection date.');
     }
     const bay = typeof data.bay === 'string' && data.bay.trim() ? data.bay.trim() : undefined;
-    const note = readyEditNote(floor, bay, collectionDate);
+    const jiraTicket = normalizeJiraTicket(
+      typeof data.jiraTicket === 'string' ? data.jiraTicket : undefined,
+    );
+    const note = readyEditNote(floor, bay, collectionDate, jiraTicket);
     let department: Department = '';
 
     await db.runTransaction(async (tx) => {
@@ -283,6 +294,7 @@ export const updateReadyOrder = onCall(async (request) => {
       tx.update(ref, {
         pallets: floor,
         bay: bay || FieldValue.delete(),
+        jiraTicket: jiraTicket || FieldValue.delete(),
         collectionDate: collectionDate || FieldValue.delete(),
       });
     });

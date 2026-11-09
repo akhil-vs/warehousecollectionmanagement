@@ -22,11 +22,13 @@ import {
   IconDept,
   IconEdit,
   IconPallet,
+  IconTicket,
 } from './Icons';
 
 export interface ReadyOrderPatch {
   pallets: number;
   bay?: string;
+  jiraTicket?: string;
   collectionDate?: string;
 }
 
@@ -42,6 +44,7 @@ interface Props {
     orderId: string;
     pallets?: number;
     bay?: string;
+    jiraTicket?: string;
     collectionDate?: string;
     department: Department;
     operator: string;
@@ -70,6 +73,7 @@ export function ReadyOrderEditForm({
 }) {
   const [pallets, setPallets] = useState(String(order.pallets));
   const [bay, setBay] = useState(order.bay ?? '');
+  const [jiraTicket, setJiraTicket] = useState(order.jiraTicket ?? '');
   const [collectionDate, setCollectionDate] = useState(order.collectionDate ?? '');
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -84,6 +88,7 @@ export function ReadyOrderEditForm({
     await onSave({
       pallets: Math.floor(n),
       bay: bay.trim() || undefined,
+      jiraTicket: jiraTicket.trim() || undefined,
       collectionDate: collectionDate.trim() || undefined,
     });
   }
@@ -110,6 +115,20 @@ export function ReadyOrderEditForm({
           Bay (optional)
         </span>
         <input value={bay} onChange={(e) => setBay(e.target.value)} />
+      </label>
+      <label className="field">
+        <span className="icon-label">
+          <IconTicket />
+          Jira ticket (optional)
+        </span>
+        <input
+          className="mono"
+          value={jiraTicket}
+          onChange={(e) => setJiraTicket(e.target.value.toUpperCase())}
+          placeholder="PROJ-123"
+          autoComplete="off"
+          spellCheck={false}
+        />
       </label>
       <CollectionDateField value={collectionDate} onChange={setCollectionDate} optional={false} />
       <div className="row-actions">
@@ -148,6 +167,7 @@ export function PalletReadyPanel({
   const [orderId, setOrderId] = useState('');
   const [pallets, setPallets] = useState('');
   const [bay, setBay] = useState('');
+  const [jiraTicket, setJiraTicket] = useState('');
   const [collectionDate, setCollectionDate] = useState('');
   const [department, setDepartment] = useState<Department>(deptDefault);
   const [error, setError] = useState<string | null>(null);
@@ -206,6 +226,7 @@ export function PalletReadyPanel({
     setOrderId('');
     setPallets('');
     setBay('');
+    setJiraTicket('');
     setCollectionDate('');
     setError(null);
     orderIdRef.current?.focus();
@@ -228,6 +249,7 @@ export function PalletReadyPanel({
       orderId: id,
       pallets: parsedPallets(),
       bay: bay || undefined,
+      jiraTicket: jiraTicket || undefined,
       collectionDate: collectionDate || undefined,
       department: role === 'admin' ? department : deptDefault,
       operator,
@@ -310,7 +332,7 @@ export function PalletReadyPanel({
     );
   }
 
-  const colSpan = role === 'admin' ? 8 : 7;
+  const colSpan = role === 'admin' ? 9 : 8;
 
   return (
     <section className="panel">
@@ -320,8 +342,8 @@ export function PalletReadyPanel({
           <h2>Pallet ready</h2>
         </div>
         <p>
-          Mark orders ready with optional pallets, bay, and collection date. Use <strong>Edit</strong>{' '}
-          on any ready row to change pallets, bay, or collection date before the driver arrives.
+          Mark orders ready with optional pallets, bay, Jira ticket, and collection date. Use{' '}
+          <strong>Edit</strong> on any ready row to change those fields before the driver arrives.
         </p>
       </div>
 
@@ -361,6 +383,20 @@ export function PalletReadyPanel({
             Bay (optional)
           </span>
           <input value={bay} onChange={(e) => setBay(e.target.value)} />
+        </label>
+        <label className="field">
+          <span className="icon-label">
+            <IconTicket />
+            Jira ticket (optional)
+          </span>
+          <input
+            className="mono"
+            value={jiraTicket}
+            onChange={(e) => setJiraTicket(e.target.value.toUpperCase())}
+            placeholder="PROJ-123"
+            autoComplete="off"
+            spellCheck={false}
+          />
         </label>
         <CollectionDateField value={collectionDate} onChange={setCollectionDate} />
         {role === 'admin' && (
@@ -408,6 +444,7 @@ export function PalletReadyPanel({
                 <span className={`status-pill ${order.status}`}>{statusLabel(order.status)}</span>
                 <span>
                   {order.pallets} plt{order.bay ? ` · Bay ${order.bay}` : ''}
+                  {order.jiraTicket ? ` · ${order.jiraTicket}` : ''}
                   {role === 'admin' ? ` · ${order.department}` : ''}
                 </span>
                 <span className="muted">
@@ -446,6 +483,7 @@ export function PalletReadyPanel({
               <th>Status</th>
               <th>Pallets</th>
               <th>Bay</th>
+              <th>Jira</th>
               <th>Collect</th>
               {role === 'admin' && <th>Dept</th>}
               <th>Ready</th>
@@ -476,6 +514,9 @@ export function PalletReadyPanel({
                   </td>
                   <td>{order.pallets}</td>
                   <td>{order.bay || <span className="muted">—</span>}</td>
+                  <td className="mono">
+                    {order.jiraTicket || <span className="muted">—</span>}
+                  </td>
                   <td>
                     {collectionDateLabel(order.collectionDate, now) || (
                       <span className="muted">—</span>

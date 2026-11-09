@@ -66,6 +66,16 @@ export function IconBay(props: IconProps) {
   );
 }
 
+/** Jira / ticket reference */
+export function IconTicket(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z" />
+      <path d="M12 7v2M12 15v2" />
+    </Icon>
+  );
+}
+
 /** Calendar / collection date */
 export function IconCalendar(props: IconProps) {
   return (

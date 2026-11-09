@@ -57,6 +57,7 @@ export function DockPanel({
         o.id.toLowerCase().includes(term) ||
         o.department.toLowerCase().includes(term) ||
         (o.bay || '').toLowerCase().includes(term) ||
+        (o.jiraTicket || '').toLowerCase().includes(term) ||
         (o.collectionDate || '').includes(term) ||
         o.readyBy.toLowerCase().includes(term),
     );
@@ -198,7 +199,8 @@ export function DockPanel({
               <div className="dock-card-main">
                 <span className="mono order-id">{order.id}</span>
                 <span>
-                  {order.pallets} plt{order.bay ? ` · Bay ${order.bay}` : ''} · {order.department}
+                  {order.pallets} plt{order.bay ? ` · Bay ${order.bay}` : ''}
+                  {order.jiraTicket ? ` · ${order.jiraTicket}` : ''} · {order.department}
                 </span>
                 <span className="muted">
                   {order.readyBy} · {formatTime(order.readyAt)} · ready{' '}
@@ -224,6 +226,7 @@ export function DockPanel({
               <th>Order</th>
               <th>Pallets</th>
               <th>Bay</th>
+              <th>Jira</th>
               <th>Dept</th>
               <th>Ready</th>
               <th>Actions</th>
@@ -237,6 +240,9 @@ export function DockPanel({
                 <td className="mono">{order.id}</td>
                 <td>{order.pallets}</td>
                 <td>{order.bay || <span className="muted">—</span>}</td>
+                <td className="mono">
+                  {order.jiraTicket || <span className="muted">—</span>}
+                </td>
                 <td>{order.department}</td>
                 <td>
                   {order.readyBy}

@@ -8,6 +8,8 @@ import {
   lookupDockStatusLabel,
   markReadyConflict,
   normalizeDepartments,
+  normalizeJiraTicket,
+  readyEditNote,
   withLookupResponse,
 } from '../../shared/orderState';
 import type { Lookup, Order } from '../../shared/types';
@@ -102,5 +104,23 @@ describe('normalizeDepartments', () => {
   it('falls back to defaults and dedupes', () => {
     expect(normalizeDepartments(null)).toEqual(['B2B', 'Therabody']);
     expect(normalizeDepartments(['  Acme ', 'Acme', 'Beta'])).toEqual(['Acme', 'Beta']);
+  });
+});
+
+describe('normalizeJiraTicket', () => {
+  it('trims, uppercases, and drops blanks', () => {
+    expect(normalizeJiraTicket(undefined)).toBeUndefined();
+    expect(normalizeJiraTicket('')).toBeUndefined();
+    expect(normalizeJiraTicket('  ')).toBeUndefined();
+    expect(normalizeJiraTicket(' proj-12 ')).toBe('PROJ-12');
+  });
+});
+
+describe('readyEditNote', () => {
+  it('includes optional bay, collection date, and jira ticket', () => {
+    expect(readyEditNote(2)).toBe('2 plt');
+    expect(readyEditNote(3, 'A1', '2026-11-10', 'WH-42')).toBe(
+      '3 plt · Bay A1 · collect 2026-11-10 · Jira WH-42',
+    );
   });
 });

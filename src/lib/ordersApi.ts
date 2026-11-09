@@ -40,6 +40,7 @@ import {
   normalizeDepartments,
   isKnownDepartment,
   resolvePalletCount,
+  normalizeJiraTicket,
   readyEditNote,
   toUserError,
   withLookupResponse,
@@ -64,6 +65,9 @@ function mapOrder(id: string, data: Record<string, unknown>): Order {
     status: data.status as Order['status'],
     pallets: Number(data.pallets),
     bay: (data.bay as string | undefined) || undefined,
+    jiraTicket: normalizeJiraTicket(
+      typeof data.jiraTicket === 'string' ? data.jiraTicket : undefined,
+    ),
     department: String(data.department),
     collectionDate: parseDateInput(
       typeof data.collectionDate === 'string' ? data.collectionDate : undefined,
@@ -291,6 +295,7 @@ export async function markOrderReady(input: {
   orderId: string;
   pallets?: number;
   bay?: string;
+  jiraTicket?: string;
   collectionDate?: string;
   department: Department;
   operator: string;
@@ -300,6 +305,7 @@ export async function markOrderReady(input: {
   if (!input.operator.trim()) return { ok: false, error: 'Enter your name at the top.' };
   const collection = resolveCollectionDate(input.collectionDate);
   if (!collection.ok) return collection;
+  const jiraTicket = normalizeJiraTicket(input.jiraTicket);
 
   if (!isFirebaseConfigured()) {
     const departments = demoGetDepartments();
@@ -315,6 +321,7 @@ export async function markOrderReady(input: {
       status: 'ready',
       pallets,
       bay: input.bay?.trim() || undefined,
+      jiraTicket,
       collectionDate: collection.date,
       department: input.department,
       readyBy: input.operator.trim(),
@@ -329,6 +336,7 @@ export async function markOrderReady(input: {
     orderId: id,
     pallets: input.pallets,
     bay: input.bay,
+    jiraTicket: input.jiraTicket,
     collectionDate: input.collectionDate,
     department: input.department,
     operator: input.operator,
@@ -338,7 +346,7 @@ export async function markOrderReady(input: {
 export async function updateReadyOrder(
   order: Order,
   operator: string,
-  patch: { pallets: number; bay?: string; collectionDate?: string },
+  patch: { pallets: number; bay?: string; jiraTicket?: string; collectionDate?: string },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!operator.trim()) return { ok: false, error: 'Enter your name at the top.' };
   if (!Number.isFinite(patch.pallets) || patch.pallets < 1) {
@@ -348,6 +356,7 @@ export async function updateReadyOrder(
   const collection = resolveCollectionDate(patch.collectionDate);
   if (!collection.ok) return collection;
   const bay = patch.bay?.trim() || undefined;
+  const jiraTicket = normalizeJiraTicket(patch.jiraTicket);
 
   if (!isFirebaseConfigured()) {
     const existing = demoGetOrders().find((o) => o.id === order.id);
@@ -355,11 +364,12 @@ export async function updateReadyOrder(
     if (existing.status !== 'ready') {
       return { ok: false, error: 'Only ready orders can be edited.' };
     }
-    const note = readyEditNote(pallets, bay, collection.date);
+    const note = readyEditNote(pallets, bay, collection.date, jiraTicket);
     demoUpsertOrder({
       ...existing,
       pallets,
       bay,
+      jiraTicket,
       collectionDate: collection.date,
     });
     demoLogEvent('updated', order.id, operator.trim(), existing.department, note);
@@ -371,6 +381,7 @@ export async function updateReadyOrder(
     operator,
     pallets,
     bay,
+    jiraTicket,
     collectionDate: patch.collectionDate,
   });
 }
@@ -583,6 +594,7 @@ export async function reopenOrder(
       status: 'ready',
       pallets: existing.pallets,
       bay: existing.bay,
+      jiraTicket: existing.jiraTicket,
       collectionDate: existing.collectionDate,
       department: existing.department,
       readyBy: existing.readyBy,
