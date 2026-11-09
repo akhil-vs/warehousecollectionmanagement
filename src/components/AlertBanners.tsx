@@ -55,6 +55,12 @@ export function AlertBanners({
               Order <span className="mono">{order.id}</span> · {order.pallets} pallet
               {order.pallets === 1 ? '' : 's'}
               {order.bay ? ` · Bay ${order.bay}` : ''}
+              {order.jiraTicket ? (
+                <>
+                  {' · '}
+                  <span className="mono">{order.jiraTicket}</span>
+                </>
+              ) : null}
               {order.door ? ` · Door ${order.door}` : ''}
               {order.haulier ? ` · ${order.haulier}` : ''} · marked by {order.readyBy} · dock{' '}
               {order.arrivedBy} at {formatTime(order.arrivedAt)} · waiting{' '}

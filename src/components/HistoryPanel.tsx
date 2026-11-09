@@ -48,6 +48,7 @@ export function HistoryPanel({ role, departments, orders, events }: Props) {
           o.id.toLowerCase().includes(term) ||
           o.department.toLowerCase().includes(term) ||
           o.readyBy.toLowerCase().includes(term) ||
+          (o.jiraTicket || '').toLowerCase().includes(term) ||
           (o.collectionDate || '').includes(term) ||
           (o.collectedBy || '').toLowerCase().includes(term) ||
           (o.cancelledBy || '').toLowerCase().includes(term),
@@ -147,6 +148,7 @@ export function HistoryPanel({ role, departments, orders, events }: Props) {
             <th>Status</th>
             <th>Pallets</th>
             <th>Bay</th>
+            <th>Jira</th>
             <th>Dept</th>
             <th>Ready</th>
             <th>Driver / collected</th>
@@ -158,7 +160,8 @@ export function HistoryPanel({ role, departments, orders, events }: Props) {
               <span className="mono order-id">{o.id}</span>
               <span className={`status-pill ${o.status}`}>{statusLabel(o.status)}</span>
               <span>
-                {o.pallets} plt{o.bay ? ` · Bay ${o.bay}` : ''} · {o.department}
+                {o.pallets} plt{o.bay ? ` · Bay ${o.bay}` : ''}
+                {o.jiraTicket ? ` · ${o.jiraTicket}` : ''} · {o.department}
               </span>
               <span className="muted">
                 {collectionDateLabel(o.collectionDate, now) ?? 'No collection date'}
@@ -191,6 +194,7 @@ export function HistoryPanel({ role, departments, orders, events }: Props) {
             <td>{statusLabel(o.status)}</td>
             <td>{o.pallets}</td>
             <td>{o.bay || <span className="muted">—</span>}</td>
+            <td className="mono">{o.jiraTicket || <span className="muted">—</span>}</td>
             <td>{o.department}</td>
             <td>
               {o.readyBy}

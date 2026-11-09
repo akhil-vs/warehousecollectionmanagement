@@ -149,9 +149,22 @@ export function resolvePalletCount(pallets: number | undefined): number {
   return Math.floor(pallets);
 }
 
-export function readyEditNote(pallets: number, bay?: string, collectionDate?: string): string {
+/** Trim + uppercase Jira keys (e.g. `proj-12` → `PROJ-12`). Empty → undefined. */
+export function normalizeJiraTicket(value: string | undefined): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim().toUpperCase();
+  return trimmed || undefined;
+}
+
+export function readyEditNote(
+  pallets: number,
+  bay?: string,
+  collectionDate?: string,
+  jiraTicket?: string,
+): string {
   const parts = [`${pallets} plt`];
   if (bay) parts.push(`Bay ${bay}`);
   if (collectionDate) parts.push(`collect ${collectionDate}`);
+  if (jiraTicket) parts.push(`Jira ${jiraTicket}`);
   return parts.join(' · ');
 }

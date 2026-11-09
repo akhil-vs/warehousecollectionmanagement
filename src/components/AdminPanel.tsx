@@ -366,7 +366,7 @@ export function AdminPanel({
       <div className="list-block">
         <h3 className="icon-inline">
           <IconPallet />
-          Live orders — edit ready pallets / bay / collection date
+          Live orders — edit ready pallets / bay / Jira / collection date
         </h3>
       </div>
       <CollectionDateTables
@@ -379,6 +379,7 @@ export function AdminPanel({
             <th>Status</th>
             <th>Pallets</th>
             <th>Bay</th>
+            <th>Jira</th>
             <th>Collect</th>
             <th>Dept</th>
             <th>Ready</th>
@@ -397,7 +398,8 @@ export function AdminPanel({
                 <span className="mono order-id">{o.id}</span>
                 <span className={`status-pill ${o.status}`}>{statusLabel(o.status)}</span>
                 <span>
-                  {o.pallets} plt{o.bay ? ` · Bay ${o.bay}` : ''} · {o.department}
+                  {o.pallets} plt{o.bay ? ` · Bay ${o.bay}` : ''}
+                  {o.jiraTicket ? ` · ${o.jiraTicket}` : ''} · {o.department}
                 </span>
                 <span className="muted">
                   {collectionDateLabel(o.collectionDate, now) ?? 'No collection date'}
@@ -466,6 +468,7 @@ export function AdminPanel({
                 </td>
                 <td>{o.pallets}</td>
                 <td>{o.bay || <span className="muted">—</span>}</td>
+                <td className="mono">{o.jiraTicket || <span className="muted">—</span>}</td>
                 <td>
                   {collectionDateLabel(o.collectionDate, now) || <span className="muted">—</span>}
                 </td>
@@ -493,7 +496,7 @@ export function AdminPanel({
               </tr>
               {editing && (
                 <tr className="editing">
-                  <td colSpan={8}>
+                  <td colSpan={9}>
                     <ReadyOrderEditForm
                       order={o}
                       busy={editBusy}

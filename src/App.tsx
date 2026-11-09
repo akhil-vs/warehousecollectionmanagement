@@ -198,6 +198,7 @@ function AppShell() {
       orderId: string;
       pallets?: number;
       bay?: string;
+      jiraTicket?: string;
       collectionDate?: string;
       department: import('./types').Department;
       operator: string;
@@ -221,7 +222,7 @@ function AppShell() {
   const handleUpdateReady = useCallback(
     async (
       order: Order,
-      patch: { pallets: number; bay?: string; collectionDate?: string },
+      patch: { pallets: number; bay?: string; jiraTicket?: string; collectionDate?: string },
     ) => {
       if (!requireOperator()) {
         return { ok: false as const, error: 'Confirm your name for this shift first.' };
