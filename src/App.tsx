@@ -21,11 +21,13 @@ import {
   undoDriverCollection,
   updateLookupStatus,
 } from './lib/ordersApi';
-import { dockRelevantLookups } from './lib/orderState';
+import { dockRelevantLookups, STALE_WAIT_MS } from './lib/orderState';
+import { isCollectionOverdue } from './lib/format';
 import { useDeviceRole, isDepartmentRole } from './hooks/useDeviceRole';
 import { useWarehouseData } from './hooks/useWarehouseData';
 import { useToast } from './hooks/useToast';
 import { useAlerts } from './hooks/useAlerts';
+import { useNow } from './hooks/useNow';
 import { ConfirmProvider, useConfirm } from './components/ConfirmDialog';
 import { RoleSetup } from './components/RoleSetup';
 import { ReassignDeviceSheet } from './components/ReassignDeviceSheet';
@@ -128,6 +130,7 @@ function AppShell() {
   const data = useWarehouseData();
   const confirm = useConfirm();
   const { toast, showToast } = useToast();
+  const now = useNow();
   const [tab, setTab] = useState<TabId>('pallet-ready');
   const [alertsEnabled, setAlertsEnabled] = useState(
     () => typeof Notification !== 'undefined' && Notification.permission === 'granted',
@@ -325,6 +328,19 @@ function AppShell() {
                           0,
                         )
                     : 0;
+                const adminAttention =
+                  t.id === 'admin'
+                    ? data.orders.reduce((count, o) => {
+                        if (o.status === 'ready' && isCollectionOverdue(o.collectionDate, now)) {
+                          return count + 1;
+                        }
+                        if (o.status === 'arrived') {
+                          const wait = o.arrivedAt ? now - o.arrivedAt : 0;
+                          if (!o.ackBy || wait >= STALE_WAIT_MS) return count + 1;
+                        }
+                        return count;
+                      }, 0)
+                    : 0;
                 return (
                   <button
                     key={t.id}
@@ -336,6 +352,9 @@ function AppShell() {
                     {t.label}
                     {t.id === 'pallet-ready' && readyPallets > 0 ? (
                       <span className="tab-badge">{readyPallets}</span>
+                    ) : null}
+                    {t.id === 'admin' && adminAttention > 0 ? (
+                      <span className="tab-badge">{adminAttention}</span>
                     ) : null}
                   </button>
                 );
