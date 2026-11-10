@@ -6,7 +6,6 @@ import {
   formatDwell,
   formatTime,
   isCollectionOverdue,
-  startOfLocalDay,
   statusLabel,
 } from '../lib/format';
 import { canEditReady, STALE_WAIT_MS } from '../lib/orderState';
@@ -21,9 +20,9 @@ import {
   IconClipboard,
   IconDept,
   IconEdit,
-  IconHistory,
   IconPallet,
   IconTruck,
+  IconWarn,
 } from './Icons';
 
 type AdminSection = 'board' | 'corrections' | 'settings';
@@ -57,9 +56,30 @@ interface Props {
   ) => Promise<{ ok: true } | { ok: false; error: string }>;
 }
 
-function averageMinutes(values: number[]): number | null {
-  if (values.length === 0) return null;
-  return Math.round(values.reduce((a, b) => a + b, 0) / values.length);
+type DeptStat = { dept: string; orders: number; pallets: number };
+
+function palletSum(list: Order[]): number {
+  return list.reduce((n, o) => n + (Number.isFinite(o.pallets) ? o.pallets : 0), 0);
+}
+
+function summarizeByDept(list: Order[], departments: Department[]): DeptStat[] {
+  return departments
+    .map((dept) => {
+      const mine = list.filter((o) => o.department === dept);
+      return { dept, orders: mine.length, pallets: palletSum(mine) };
+    })
+    .filter((row) => row.orders > 0);
+}
+
+function orderLabel(count: number, style: 'title' | 'full' | 'short'): string {
+  if (style === 'title') return `${count} Order${count === 1 ? '' : 's'}`;
+  if (style === 'short') return `${count} ord`;
+  return `${count} order${count === 1 ? '' : 's'}`;
+}
+
+function palletLabel(count: number, style: 'title' | 'abbr'): string {
+  if (style === 'title') return `${count} Pallet${count === 1 ? '' : 's'}`;
+  return `${count} plt`;
 }
 
 function CollectCell({ order, now }: { order: Order; now: number }) {
@@ -93,7 +113,6 @@ export function AdminPanel({
 }: Props) {
   const now = useNow();
   const confirm = useConfirm();
-  const dayStart = startOfLocalDay(now);
   const [section, setSection] = useState<AdminSection>('board');
   const [orderId, setOrderId] = useState('');
   const [exceptionReason, setExceptionReason] = useState('');
@@ -129,13 +148,7 @@ export function AdminPanel({
   );
   const unacked = waiting.filter((o) => !o.ackBy);
   const oldestWaiting = waiting[0];
-  const collectedToday = orders.filter(
-    (o) => o.status === 'collected' && (o.collectedAt ?? 0) >= dayStart,
-  );
-  const cancelledToday = orders.filter(
-    (o) => o.status === 'cancelled' && (o.cancelledAt ?? 0) >= dayStart,
-  ).length;
-  const readyNow = orders.filter((o) => o.status === 'ready');
+  const readyNow = useMemo(() => orders.filter((o) => o.status === 'ready'), [orders]);
   const overdueReady = useMemo(
     () =>
       readyNow
@@ -143,9 +156,29 @@ export function AdminPanel({
         .sort((a, b) => (a.collectionDate ?? '').localeCompare(b.collectionDate ?? '') || a.readyAt - b.readyAt),
     [readyNow, now],
   );
-  const overduePlt = overdueReady.reduce(
-    (sum, o) => sum + (Number.isFinite(o.pallets) ? o.pallets : 0),
-    0,
+  const collectionToday = useMemo(
+    () =>
+      orders.filter(
+        (o) =>
+          (o.status === 'ready' || o.status === 'arrived') &&
+          collectionDateKind(o.collectionDate, now) === 'today',
+      ),
+    [orders, now],
+  );
+  const readyPlt = palletSum(readyNow);
+  const overduePlt = palletSum(overdueReady);
+  const collectionTodayPlt = palletSum(collectionToday);
+  const readyByDept = useMemo(
+    () => summarizeByDept(readyNow, departments),
+    [readyNow, departments],
+  );
+  const overdueByDept = useMemo(
+    () => summarizeByDept(overdueReady, departments),
+    [overdueReady, departments],
+  );
+  const collectionTodayByDept = useMemo(
+    () => summarizeByDept(collectionToday, departments),
+    [collectionToday, departments],
   );
   const staleWaiting = waiting.filter(
     (o) => (o.arrivedAt ?? 0) > 0 && now - (o.arrivedAt ?? 0) >= STALE_WAIT_MS,
@@ -156,37 +189,6 @@ export function AdminPanel({
       ((o.arrivedAt ?? 0) > 0 && now - (o.arrivedAt ?? 0) >= STALE_WAIT_MS),
   );
   const attentionCount = overdueReady.length + attentionWaiting.length;
-
-  const waitReport = useMemo(() => {
-    const openWaits = waiting
-      .map((o) => (o.arrivedAt ? now - o.arrivedAt : 0))
-      .filter((ms) => ms > 0);
-    const completedWaits = collectedToday
-      .map((o) => {
-        if (!o.arrivedAt || !o.collectedAt) return null;
-        return o.collectedAt - o.arrivedAt;
-      })
-      .filter((ms): ms is number => ms != null && ms >= 0);
-    return {
-      avgOpenMin: averageMinutes(openWaits.map((ms) => ms / 60_000)),
-      avgCompletedMin: averageMinutes(completedWaits.map((ms) => ms / 60_000)),
-      longestOpen: oldestWaiting,
-    };
-  }, [waiting, collectedToday, now, oldestWaiting]);
-
-  const overview = useMemo(() => {
-    return departments.map((dept) => {
-      const mine = orders.filter((o) => o.department === dept);
-      return {
-        dept,
-        ready: mine.filter((o) => o.status === 'ready').length,
-        waiting: mine.filter((o) => o.status === 'arrived').length,
-        collectedToday: mine.filter(
-          (o) => o.status === 'collected' && (o.collectedAt ?? 0) >= dayStart,
-        ).length,
-      };
-    });
-  }, [orders, dayStart, departments]);
 
   const recentForCorrection = useMemo(() => {
     return [...orders]
@@ -366,64 +368,87 @@ export function AdminPanel({
 
       {section === 'board' && (
         <div className="admin-section" role="tabpanel">
-          <div className="admin-kpi-strip" aria-label="Shift metrics">
-            <div className="admin-kpi">
-              <span className="admin-kpi-label">
-                <IconHistory /> Today
-              </span>
-              <strong>{collectedToday.length}</strong>
-              <span className="muted">collected · {cancelledToday} cancelled</span>
-            </div>
-            <div className="admin-kpi">
-              <span className="admin-kpi-label">
-                <IconPallet /> Ready
-              </span>
-              <strong>{readyNow.length}</strong>
-              <span className="muted">{overdueReady.length} overdue</span>
-            </div>
-            <div className="admin-kpi">
-              <span className="admin-kpi-label">
-                <IconTruck /> Waiting
-              </span>
-              <strong>{waiting.length}</strong>
-              <span className="muted">
-                {unacked.length} unacked · {openLookupCount} lookups
-              </span>
-            </div>
-            <div className="admin-kpi">
-              <span className="admin-kpi-label">
-                <IconAlert /> Wait time
-              </span>
-              <strong>
-                {waitReport.avgOpenMin == null ? '—' : `${waitReport.avgOpenMin}m`}
-              </strong>
-              <span className="muted">
-                avg open
-                {waitReport.avgCompletedMin != null
-                  ? ` · ${waitReport.avgCompletedMin}m done today`
-                  : ''}
-              </span>
-            </div>
-          </div>
+          <div className="admin-stat-strip" aria-label="Collection stats">
+            <article className="admin-stat-card ready">
+              <div className="admin-stat-head">
+                <h3>Ready for collection</h3>
+                <span className="admin-stat-badge">{readyNow.length}</span>
+              </div>
+              <p className="admin-stat-value">
+                {orderLabel(readyNow.length, 'title')} · {palletLabel(readyPlt, 'title')}
+              </p>
+              <p className="admin-stat-note">Staged across active bays</p>
+              <div className="admin-stat-breakdown">
+                {readyByDept.length === 0 ? (
+                  <span className="admin-stat-empty">No ready orders</span>
+                ) : (
+                  readyByDept.map((row) => (
+                    <div key={row.dept} className="admin-stat-dept">
+                      <span className="admin-stat-dept-name">{row.dept}</span>
+                      <strong>
+                        {orderLabel(row.orders, 'full')} · {palletLabel(row.pallets, 'abbr')}
+                      </strong>
+                    </div>
+                  ))
+                )}
+              </div>
+            </article>
 
-          <div className="admin-dept-strip" aria-label="Departments">
-            {overview.map((row) => (
-              <div key={row.dept} className="admin-dept-chip">
-                <span className="admin-dept-name">
-                  <IconDept />
-                  {row.dept}
-                </span>
-                <span>
-                  <strong>{row.ready}</strong> ready
-                </span>
-                <span>
-                  <strong>{row.waiting}</strong> waiting
-                </span>
-                <span>
-                  <strong>{row.collectedToday}</strong> today
+            <article className={overdueReady.length > 0 ? 'admin-stat-card critical' : 'admin-stat-card critical is-clear'}>
+              <div className="admin-stat-head">
+                <h3>Critical overdue</h3>
+                <span className="admin-stat-badge warn" aria-hidden>
+                  <IconWarn />
                 </span>
               </div>
-            ))}
+              <p className="admin-stat-value">
+                {orderLabel(overdueReady.length, 'title')} · {palletLabel(overduePlt, 'title')}
+              </p>
+              <p className="admin-stat-note">Requires immediate clearance</p>
+              <div className="admin-stat-breakdown">
+                {overdueByDept.length === 0 ? (
+                  <span className="admin-stat-empty">No overdue ready orders</span>
+                ) : (
+                  overdueByDept.map((row) => (
+                    <div key={row.dept} className="admin-stat-dept">
+                      <span className="admin-stat-dept-name">{row.dept}</span>
+                      <strong>
+                        {orderLabel(row.orders, 'full')} · {palletLabel(row.pallets, 'abbr')}
+                      </strong>
+                    </div>
+                  ))
+                )}
+              </div>
+            </article>
+
+            <article className="admin-stat-card today">
+              <div className="admin-stat-head">
+                <h3>
+                  Total collection today
+                  <span className="admin-stat-live" aria-hidden />
+                </h3>
+                <span className="admin-stat-badge ok">{collectionToday.length}</span>
+              </div>
+              <p className="admin-stat-value">
+                {orderLabel(collectionToday.length, 'title')} ·{' '}
+                {palletLabel(collectionTodayPlt, 'title')}
+              </p>
+              <p className="admin-stat-note">Scheduled for collection today</p>
+              <div className="admin-stat-breakdown">
+                {collectionTodayByDept.length === 0 ? (
+                  <span className="admin-stat-empty">Nothing scheduled today</span>
+                ) : (
+                  collectionTodayByDept.map((row) => (
+                    <div key={row.dept} className="admin-stat-dept">
+                      <span className="admin-stat-dept-name">{row.dept}</span>
+                      <strong>
+                        {orderLabel(row.orders, 'short')} · {palletLabel(row.pallets, 'abbr')}
+                      </strong>
+                    </div>
+                  ))
+                )}
+              </div>
+            </article>
           </div>
 
           {waiting.length > 0 ? (
@@ -442,9 +467,10 @@ export function AdminPanel({
                 </div>
                 <p className="muted">
                   {waiting.length} driver{waiting.length === 1 ? '' : 's'} · oldest first
-                  {waitReport.longestOpen
-                    ? ` · longest ${formatDwell(waitReport.longestOpen.arrivedAt, now)}`
+                  {oldestWaiting
+                    ? ` · longest ${formatDwell(oldestWaiting.arrivedAt, now)}`
                     : ''}
+                  {openLookupCount > 0 ? ` · ${openLookupCount} open lookup${openLookupCount === 1 ? '' : 's'}` : ''}
                 </p>
               </div>
               <ul className="order-list admin-wait-list">
