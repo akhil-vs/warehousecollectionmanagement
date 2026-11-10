@@ -192,6 +192,17 @@ export function IconAlert(props: IconProps) {
   );
 }
 
+/** Warning triangle */
+export function IconWarn(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 4.5 21 19H3L12 4.5Z" />
+      <path d="M12 10v4" />
+      <path d="M12 16.5h.01" />
+    </Icon>
+  );
+}
+
 /** Sound / speaker */
 export function IconSound(props: IconProps) {
   return (
