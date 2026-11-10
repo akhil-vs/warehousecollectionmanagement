@@ -75,11 +75,6 @@ export function AppHeader({
       {tabs ? <div className="header-tabs">{tabs}</div> : null}
 
       <div className="header-actions">
-        <div className="live-status" title="Barcode scanner auto-detection active">
-          <span className="live-dot" aria-hidden />
-          <span>Live Scanner Connected</span>
-        </div>
-
         {!alertsEnabled && (
           <button type="button" className="btn ghost compact" onClick={onEnableAlerts}>
             <IconAlert />

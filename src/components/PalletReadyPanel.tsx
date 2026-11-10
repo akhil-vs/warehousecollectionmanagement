@@ -403,10 +403,6 @@ export function PalletReadyPanel({
       <form className="ready-form stage-form" onSubmit={submit} onKeyDown={onFormKeyDown} noValidate>
         <div className="stage-form-head">
           <h3 className="stage-form-title">+ Stage new ready order</h3>
-          <p className="stage-form-status">
-            <span className="live-dot" aria-hidden />
-            Barcode scanner auto-detection active
-          </p>
         </div>
 
         <div className="stage-form-fields">
