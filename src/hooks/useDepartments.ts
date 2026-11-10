@@ -8,7 +8,7 @@ export function useDepartments(): Department[] {
 
   useEffect(() => {
     return subscribeDepartments(setDepartments, (err) => {
-      console.error('[FreightFetch] departments listener failed:', err);
+      console.error('[Dispatch Center] departments listener failed:', err);
     });
   }, []);
 

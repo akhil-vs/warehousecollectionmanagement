@@ -1,6 +1,8 @@
-# FreightFetch
+# Dispatch Center
 
 Live warehouse dock app: departments mark pallets ready, the dock alerts the owning department when a driver arrives, and the department confirms handover. Every action is stamped with the operator name and time.
+
+**Live URL:** https://dispatchcenter.vercel.app
 
 **Stack:** React + Vite (hosted on **Vercel**) · **Firebase** Anonymous Auth + Firestore (live reads) + **Cloud Functions** callables (all writes, region `europe-west2`).
 
@@ -69,7 +71,7 @@ npx firebase deploy --only firestore:rules,functions
 1. Import this GitHub repo into Vercel.
 2. Framework preset: Vite (build `npm run build`, output `dist`).
 3. Deploy. The public Firebase web config lives in `src/lib/firebaseWebConfig.ts` (safe to ship — security is Auth + Firestore rules + callables, not hiding these values). Optional: set `VITE_FIREBASE_*` in the Vercel dashboard or a local `.env` to override without a code change.
-4. In Firebase Console → Authentication → Settings → **Authorized domains**, add your Vercel hostname(s).
+4. In Firebase Console → Authentication → Settings → **Authorized domains**, add your Vercel hostname(s) (production: `dispatchcenter.vercel.app`).
 
 Without a usable Firebase web config the SPA shows **Demo mode** (in-browser only).
 

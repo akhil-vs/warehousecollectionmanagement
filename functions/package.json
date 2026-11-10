@@ -1,5 +1,5 @@
 {
-  "name": "freightfetch-functions",
+  "name": "dispatch-center-functions",
   "private": true,
   "main": "lib/functions/src/index.js",
   "engines": {

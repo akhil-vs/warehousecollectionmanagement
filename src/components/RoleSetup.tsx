@@ -31,7 +31,7 @@ export function RoleSetup({
           <span className="brand-icon" aria-hidden>
             <IconWarehouse />
           </span>
-          <p className="brand-mark">FreightFetch</p>
+          <p className="brand-mark">Dispatch Center</p>
         </div>
         <h1>
           <IconClipboard />
