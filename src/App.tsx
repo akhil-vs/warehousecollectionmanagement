@@ -30,7 +30,6 @@ import { ConfirmProvider, useConfirm } from './components/ConfirmDialog';
 import { RoleSetup } from './components/RoleSetup';
 import { ReassignDeviceSheet } from './components/ReassignDeviceSheet';
 import { AppHeader } from './components/AppHeader';
-import { AppFooter } from './components/AppFooter';
 import { ShiftBanner } from './components/ShiftBanner';
 import { AlertBanners } from './components/AlertBanners';
 import { PalletReadyPanel } from './components/PalletReadyPanel';
@@ -311,15 +310,20 @@ function AppShell() {
           tabs.length > 0 ? (
             <nav className="tabs header-tab-nav" aria-label="Sections">
               {tabs.map((t) => {
-                const readyCount =
+                const readyPallets =
                   t.id === 'pallet-ready'
-                    ? data.orders.filter(
-                        (o) =>
-                          (o.status === 'ready' || o.status === 'arrived') &&
-                          (isDepartmentRole(role, device.departments)
-                            ? o.department === role
-                            : true),
-                      ).length
+                    ? data.orders
+                        .filter(
+                          (o) =>
+                            (o.status === 'ready' || o.status === 'arrived') &&
+                            (isDepartmentRole(role, device.departments)
+                              ? o.department === role
+                              : true),
+                        )
+                        .reduce(
+                          (sum, o) => sum + (Number.isFinite(o.pallets) ? o.pallets : 0),
+                          0,
+                        )
                     : 0;
                 return (
                   <button
@@ -330,8 +334,8 @@ function AppShell() {
                   >
                     <TabIcon icon={t.icon} />
                     {t.label}
-                    {t.id === 'pallet-ready' && readyCount > 0 ? (
-                      <span className="tab-badge">{readyCount}</span>
+                    {t.id === 'pallet-ready' && readyPallets > 0 ? (
+                      <span className="tab-badge">{readyPallets}</span>
                     ) : null}
                   </button>
                 );
@@ -585,12 +589,6 @@ function AppShell() {
           />
         )}
       </main>
-
-      <AppFooter
-        stationId={
-          role === 'dock' ? 'WH-DOCK-01' : role === 'admin' ? 'WH-ADMIN-01' : `WH-${role}-ST4`
-        }
-      />
 
       {toast && <div className="toast">{toast}</div>}
     </div>
