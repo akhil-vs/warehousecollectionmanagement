@@ -482,23 +482,29 @@ export function AdminPanel({
                   <span className="muted">{formatTime(o.readyAt)}</span>
                 </td>
                 <td className="table-actions">
-                  {canEditReady(o) && (
-                    <button
-                      type="button"
-                      className="btn ghost"
-                      onClick={() => {
-                        setEditingId(o.id);
-                        setEditError(null);
-                      }}
-                    >
-                      <IconEdit />
-                      Edit
-                    </button>
+                  {editing ? (
+                    <span className="editing-indicator" aria-live="polite">
+                      Editing…
+                    </span>
+                  ) : (
+                    canEditReady(o) && (
+                      <button
+                        type="button"
+                        className="btn ghost"
+                        onClick={() => {
+                          setEditingId(o.id);
+                          setEditError(null);
+                        }}
+                      >
+                        <IconEdit />
+                        Edit
+                      </button>
+                    )
                   )}
                 </td>
               </tr>
               {editing && (
-                <tr className="editing">
+                <tr className="edit-row">
                   <td colSpan={9}>
                     <ReadyOrderEditForm
                       order={o}

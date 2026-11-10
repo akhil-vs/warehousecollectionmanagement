@@ -22,10 +22,17 @@ export function CollectionDateField({
 
   return (
     <label className="field collection-date-field">
-      <span className="icon-label">
-        <IconCalendar />
-        {label}
-        {optional ? ' (opt)' : ''}
+      <span className="field-label-row">
+        <span className="icon-label">
+          <IconCalendar />
+          {label}
+          {optional ? ' (opt)' : ''}
+        </span>
+        {value ? (
+          <button type="button" className="field-clear" onClick={() => onChange('')}>
+            Clear
+          </button>
+        ) : null}
       </span>
       <div className="collection-date-controls">
         <button
@@ -48,11 +55,6 @@ export function CollectionDateField({
         >
           Tomorrow
         </button>
-        {value ? (
-          <button type="button" className="btn ghost subtle" onClick={() => onChange('')}>
-            Clear
-          </button>
-        ) : null}
       </div>
     </label>
   );
