@@ -103,6 +103,15 @@ export function ReadyOrderEditForm({
   const [jiraTicket, setJiraTicket] = useState(order.jiraTicket ?? '');
   const [collectionDate, setCollectionDate] = useState(order.collectionDate ?? '');
   const [localError, setLocalError] = useState<string | null>(null);
+  const titleId = `ready-edit-title-${order.id}`;
+
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape' && !busy) onCancel();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [busy, onCancel]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -126,43 +135,66 @@ export function ReadyOrderEditForm({
   }
 
   return (
-    <form className="ready-edit-form" onSubmit={(e) => void submit(e)}>
-      <label className="field">
-        <span className="icon-label">
-          <IconPallet />
-          Pallets
+    <form
+      className="ready-edit-form"
+      onSubmit={(e) => void submit(e)}
+      aria-labelledby={titleId}
+    >
+      <div className="ready-edit-head">
+        <p id={titleId} className="ready-edit-title">
+          <span className="ready-edit-dot" aria-hidden />
+          Editing order <span className="mono">#{order.id}</span>
+        </p>
+        <span className="ready-edit-dismiss-hint">
+          <kbd>Esc</kbd> to dismiss
         </span>
-        <input
-          type="number"
-          min={1}
-          value={pallets}
-          onChange={(e) => setPallets(e.target.value)}
-          required
-          autoFocus
+      </div>
+
+      <div className="ready-edit-fields">
+        <label className="field field-pallets">
+          <span className="icon-label">
+            <IconPallet />
+            Pallets
+          </span>
+          <input
+            type="number"
+            min={1}
+            value={pallets}
+            onChange={(e) => setPallets(e.target.value)}
+            required
+            autoFocus
+          />
+        </label>
+        <label className="field field-bay">
+          <span className="icon-label">
+            <IconBay />
+            Bay (opt)
+          </span>
+          <input value={bay} onChange={(e) => setBay(e.target.value)} placeholder="e.g. Bay 2" />
+        </label>
+        <JiraTicketField
+          value={jiraTicket}
+          onChange={setJiraTicket}
+          id={jiraFieldId ?? `ready-edit-jira-${order.id}`}
         />
-      </label>
-      <label className="field">
-        <span className="icon-label">
-          <IconBay />
-          Bay (opt)
-        </span>
-        <input value={bay} onChange={(e) => setBay(e.target.value)} placeholder="e.g. Bay 2" />
-      </label>
-      <JiraTicketField
-        value={jiraTicket}
-        onChange={setJiraTicket}
-        id={jiraFieldId ?? `ready-edit-jira-${order.id}`}
-      />
-      <CollectionDateField value={collectionDate} onChange={setCollectionDate} optional={false} />
-      <div className="row-actions">
-        <button type="submit" className="btn primary" disabled={busy}>
-          {busy ? 'Saving…' : 'Save changes'}
-        </button>
+        <CollectionDateField value={collectionDate} onChange={setCollectionDate} optional={false} />
+      </div>
+
+      {(localError || error) && (
+        <p className="form-error" role="alert">
+          {localError || error}
+        </p>
+      )}
+
+      <div className="ready-edit-foot">
         <button type="button" className="btn ghost" disabled={busy} onClick={onCancel}>
           Cancel
         </button>
+        <button type="submit" className="btn primary" disabled={busy}>
+          <IconCheck />
+          {busy ? 'Saving…' : 'Save changes'}
+        </button>
       </div>
-      {(localError || error) && <p className="form-error">{localError || error}</p>}
     </form>
   );
 }
@@ -589,10 +621,18 @@ export function PalletReadyPanel({
                         : ` · ready ${formatDwell(order.readyAt, now)}`}
                     </span>
                   </td>
-                  <td className="table-actions">{renderActions(order)}</td>
+                  <td className="table-actions">
+                    {editing ? (
+                      <span className="editing-indicator" aria-live="polite">
+                        Editing…
+                      </span>
+                    ) : (
+                      renderActions(order)
+                    )}
+                  </td>
                 </tr>
                 {editing && (
-                  <tr className="editing">
+                  <tr className="edit-row">
                     <td colSpan={colSpan}>
                       <ReadyOrderEditForm
                         order={order}
