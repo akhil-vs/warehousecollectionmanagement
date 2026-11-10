@@ -1,28 +1,44 @@
-@import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Barlow:wght@600;700;800&display=swap');
 
 :root {
-  --ink: #1c1914;
-  --muted: #6a645a;
-  --line: rgba(28, 25, 20, 0.1);
-  --line-strong: rgba(28, 25, 20, 0.22);
-  --surface: rgba(255, 255, 255, 0.88);
-  --surface-solid: #fffdf8;
-  --accent: #e0a045;
-  --accent-hot: #f0b45a;
-  --accent-ink: #8a5a12;
+  --ink: #1a1d23;
+  --muted: #6b7280;
+  --line: rgba(26, 29, 35, 0.08);
+  --line-strong: rgba(26, 29, 35, 0.16);
+  --surface: #ffffff;
+  --surface-solid: #ffffff;
+  --surface-soft: #f5f6f8;
+  --accent: #e8871a;
+  --accent-hot: #f49a2c;
+  --accent-ink: #b45f00;
   --accent-deep: #c45c26;
-  --danger: #8b1e1e;
-  --ok: #2f6b3a;
-  --font-display: 'Archivo Black', 'Arial Black', sans-serif;
-  --font-body: 'Source Sans 3', 'Segoe UI', sans-serif;
+  --accent-soft: rgba(232, 135, 26, 0.12);
+  --danger: #c0392b;
+  --danger-soft: #fdecea;
+  --ok: #2f7a45;
+  --ok-soft: #e8f5ec;
+  --warn: #b8860b;
+  --warn-soft: #fff4cc;
+  --ready-pill-bg: #ffe566;
+  --ready-pill-ink: #5c4a00;
+  --overdue-bar: #fff1e0;
+  --overdue-bar-ink: #8a4500;
+  --today-bar: #1e293b;
+  --today-bar-ink: #f8fafc;
+  --upcoming-bar: #eef2f7;
+  --font-display: 'Barlow', 'Segoe UI', sans-serif;
+  --font-body: 'IBM Plex Sans', 'Segoe UI', sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
-  --page-gutter: clamp(0.75rem, 3.2vw, 1.5rem);
-  --content-max: 1100px;
+  --page-gutter: clamp(0.85rem, 2.8vw, 1.75rem);
+  --content-max: 1280px;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow-card: 0 1px 2px rgba(26, 29, 35, 0.04), 0 8px 24px rgba(26, 29, 35, 0.05);
   font-family: var(--font-body);
-  line-height: 1.4;
+  line-height: 1.45;
   font-weight: 400;
   color: var(--ink);
-  background-color: #d8d2c6;
+  background-color: var(--surface-soft);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -51,23 +67,8 @@ body {
   min-width: 320px;
   overflow-x: clip;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.28), transparent 16rem),
-    repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 47px,
-      rgba(28, 25, 20, 0.028) 47px,
-      rgba(28, 25, 20, 0.028) 48px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      transparent,
-      transparent 47px,
-      rgba(28, 25, 20, 0.028) 47px,
-      rgba(28, 25, 20, 0.028) 48px
-    ),
-    radial-gradient(ellipse at 72% -8%, rgba(224, 160, 69, 0.2), transparent 42%),
-    linear-gradient(165deg, #e8e2d5 0%, #d4dade 50%, #cbd2ca 100%);
+    radial-gradient(ellipse at 12% -10%, rgba(232, 135, 26, 0.08), transparent 42%),
+    linear-gradient(180deg, #fafbfc 0%, #f0f2f5 48%, #e9edf2 100%);
   background-attachment: fixed;
 }
 

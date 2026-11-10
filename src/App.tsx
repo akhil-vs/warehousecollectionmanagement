@@ -30,6 +30,7 @@ import { ConfirmProvider, useConfirm } from './components/ConfirmDialog';
 import { RoleSetup } from './components/RoleSetup';
 import { ReassignDeviceSheet } from './components/ReassignDeviceSheet';
 import { AppHeader } from './components/AppHeader';
+import { AppFooter } from './components/AppFooter';
 import { ShiftBanner } from './components/ShiftBanner';
 import { AlertBanners } from './components/AlertBanners';
 import { PalletReadyPanel } from './components/PalletReadyPanel';
@@ -306,6 +307,38 @@ function AppShell() {
           device.setError(null);
           setReassignOpen(true);
         }}
+        tabs={
+          tabs.length > 0 ? (
+            <nav className="tabs header-tab-nav" aria-label="Sections">
+              {tabs.map((t) => {
+                const readyCount =
+                  t.id === 'pallet-ready'
+                    ? data.orders.filter(
+                        (o) =>
+                          (o.status === 'ready' || o.status === 'arrived') &&
+                          (isDepartmentRole(role, device.departments)
+                            ? o.department === role
+                            : true),
+                      ).length
+                    : 0;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className={tab === t.id ? 'tab active' : 'tab'}
+                    onClick={() => setTab(t.id)}
+                  >
+                    <TabIcon icon={t.icon} />
+                    {t.label}
+                    {t.id === 'pallet-ready' && readyCount > 0 ? (
+                      <span className="tab-badge">{readyCount}</span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </nav>
+          ) : undefined
+        }
       />
 
       {reassignOpen && (
@@ -422,22 +455,6 @@ function AppShell() {
           }
         }}
       />
-
-      {tabs.length > 0 && (
-        <nav className="tabs" aria-label="Sections">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={tab === t.id ? 'tab active' : 'tab'}
-              onClick={() => setTab(t.id)}
-            >
-              <TabIcon icon={t.icon} />
-              {t.label}
-            </button>
-          ))}
-        </nav>
-      )}
 
       <main className="main">
         {showReady && (
@@ -568,6 +585,12 @@ function AppShell() {
           />
         )}
       </main>
+
+      <AppFooter
+        stationId={
+          role === 'dock' ? 'WH-DOCK-01' : role === 'admin' ? 'WH-ADMIN-01' : `WH-${role}-ST4`
+        }
+      />
 
       {toast && <div className="toast">{toast}</div>}
     </div>

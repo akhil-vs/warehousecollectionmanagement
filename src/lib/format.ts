@@ -46,15 +46,15 @@ export function isStaleWait(fromTs: number | undefined, now = Date.now()): boole
 export function statusLabel(status: string): string {
   switch (status) {
     case 'ready':
-      return 'Ready';
+      return 'READY';
     case 'arrived':
-      return 'Driver waiting';
+      return 'WAITING';
     case 'collected':
-      return 'Collected';
+      return 'COLLECTED';
     case 'cancelled':
-      return 'Cancelled';
+      return 'CANCELLED';
     default:
-      return status;
+      return status.toUpperCase();
   }
 }
 
@@ -71,11 +71,10 @@ export function startOfLocalDay(now = Date.now()): number {
 export function formatDate(date?: string): string {
   const parsed = parseDateInput(date);
   if (!parsed) return '—';
-  const [y, m, d] = parsed.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
-    day: '2-digit',
-    month: 'short',
-  });
+  const [, m, d] = parsed.split('-').map(Number);
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const day = String(d).padStart(2, '0');
+  return `${day} ${months[m - 1] ?? '??'}`;
 }
 
 export function collectionDateLabel(date: string | undefined, now = Date.now()): string | undefined {

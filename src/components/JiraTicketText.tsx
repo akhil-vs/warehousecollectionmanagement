@@ -9,5 +9,5 @@ export function JiraTicketText({ value, fallback = true }: Props) {
   if (!value) {
     return fallback ? <span className="muted">—</span> : null;
   }
-  return <span className="mono jira-ticket">{value}</span>;
+  return <span className="mono jira-ticket jira-pill">{value}</span>;
 }
