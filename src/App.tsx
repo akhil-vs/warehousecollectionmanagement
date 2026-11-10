@@ -82,7 +82,7 @@ function BootScreen({ title, message }: { title?: string; message: string }) {
           <span className="brand-icon" aria-hidden>
             <IconWarehouse />
           </span>
-          <p className="brand-mark">FreightFetch</p>
+          <p className="brand-mark">Dispatch Center</p>
         </div>
         {title ? <h1>{title}</h1> : null}
         <p className="lede">{message}</p>
