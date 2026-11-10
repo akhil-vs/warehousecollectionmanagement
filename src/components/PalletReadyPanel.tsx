@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
 import type { Department, DeviceRole, Order } from '../types';
 import {
+  collectionDateKind,
   collectionDateLabel,
   formatDwell,
   formatTime,
@@ -65,6 +66,23 @@ interface Props {
   onCancel: (order: Order) => void;
 }
 
+function CollectCell({ order, now }: { order: Order; now: number }) {
+  const label = collectionDateLabel(order.collectionDate, now);
+  if (!label) return <span className="muted">—</span>;
+  const kind = collectionDateKind(order.collectionDate, now);
+  return (
+    <span className={`collect-cell collect-${kind}`}>
+      <span className="collect-dot" aria-hidden />
+      {label}
+    </span>
+  );
+}
+
+function BayCell({ bay }: { bay?: string }) {
+  if (!bay) return <span className="muted">—</span>;
+  return <span className="bay-pill">{bay.startsWith('Bay') ? bay : `Bay ${bay}`}</span>;
+}
+
 export function ReadyOrderEditForm({
   order,
   busy,
@@ -126,9 +144,9 @@ export function ReadyOrderEditForm({
       <label className="field">
         <span className="icon-label">
           <IconBay />
-          Bay (optional)
+          Bay (opt)
         </span>
-        <input value={bay} onChange={(e) => setBay(e.target.value)} />
+        <input value={bay} onChange={(e) => setBay(e.target.value)} placeholder="e.g. Bay 2" />
       </label>
       <JiraTicketField
         value={jiraTicket}
@@ -170,7 +188,7 @@ export function PalletReadyPanel({
   const orderIdRef = useRef<HTMLInputElement>(null);
   const busyRef = useRef(false);
   const [orderId, setOrderId] = useState('');
-  const [pallets, setPallets] = useState('');
+  const [pallets, setPallets] = useState('1');
   const [bay, setBay] = useState('');
   const [jiraTicket, setJiraTicket] = useState('');
   const [collectionDate, setCollectionDate] = useState('');
@@ -215,6 +233,12 @@ export function PalletReadyPanel({
     });
   }, [orders, role, departments]);
 
+  const awaiting = useMemo(() => {
+    const ready = visible.filter((o) => o.status === 'ready' || o.status === 'arrived');
+    const plt = ready.reduce((n, o) => n + (Number.isFinite(o.pallets) ? o.pallets : 0), 0);
+    return { orders: ready.length, pallets: plt };
+  }, [visible]);
+
   const canAck = isDepartmentRole(role, departments) || role === 'admin';
   const canHandover = isDepartmentRole(role, departments);
   const canEdit = isDepartmentRole(role, departments) || role === 'admin';
@@ -229,7 +253,7 @@ export function PalletReadyPanel({
 
   function clearFields() {
     setOrderId('');
-    setPallets('');
+    setPallets('1');
     setBay('');
     setJiraTicket('');
     setCollectionDate('');
@@ -275,6 +299,15 @@ export function PalletReadyPanel({
   }
 
   function submit(e: FormEvent) {
+    e.preventDefault();
+    void save();
+  }
+
+  function onFormKeyDown(e: KeyboardEvent<HTMLFormElement>) {
+    if (e.key !== 'Enter') return;
+    const target = e.target as HTMLElement | null;
+    if (target?.tagName === 'TEXTAREA') return;
+    if (target?.tagName === 'BUTTON' && (target as HTMLButtonElement).type === 'button') return;
     e.preventDefault();
     void save();
   }
@@ -346,79 +379,108 @@ export function PalletReadyPanel({
 
   return (
     <section className="panel">
-      <div className="panel-head">
-        <div className="panel-title">
-          <IconPallet />
-          <h2>Pallet ready</h2>
+      <div className="panel-head panel-head-split">
+        <div>
+          <div className="panel-title">
+            <IconPallet />
+            <h2>Pallet ready</h2>
+          </div>
+          <p>
+            Mark orders ready with optional pallets, bay, Jira ticket number, and collection date.
+            Use <strong>Edit</strong> on any ready row to change those fields before the driver
+            arrives.
+          </p>
         </div>
-        <p>
-          Mark orders ready with optional pallets, bay, Jira ticket number, and collection date.
-          Use <strong>Edit</strong> on any ready row to change those fields before the driver
-          arrives.
-        </p>
+        <div className="awaiting-summary" aria-live="polite">
+          <span className="awaiting-label">Awaiting pickup</span>
+          <strong>
+            {awaiting.orders} Order{awaiting.orders === 1 ? '' : 's'}
+          </strong>
+          <span className="awaiting-plt">{awaiting.pallets} PLT</span>
+        </div>
       </div>
 
-      <form className="ready-form" onSubmit={submit} noValidate>
-        <label className="field">
-          <span className="icon-label">
-            <IconBarcode />
-            Order ID
-          </span>
-          <input
-            ref={orderIdRef}
-            className="mono"
-            value={orderId}
-            onChange={(e) => onOrderIdChange(e.target.value)}
-            onKeyDown={onOrderIdKeyDown}
-            required
-            autoComplete="off"
-            autoFocus
-            placeholder="Scan or type"
-          />
-        </label>
-        <label className="field">
-          <span className="icon-label">
-            <IconPallet />
-            Pallets (optional)
-          </span>
-          <input
-            type="number"
-            min={1}
-            value={pallets}
-            onChange={(e) => setPallets(e.target.value)}
-          />
-        </label>
-        <label className="field">
-          <span className="icon-label">
-            <IconBay />
-            Bay (optional)
-          </span>
-          <input value={bay} onChange={(e) => setBay(e.target.value)} />
-        </label>
-        <JiraTicketField value={jiraTicket} onChange={setJiraTicket} id="mark-ready-jira" />
-        <CollectionDateField value={collectionDate} onChange={setCollectionDate} />
-        {role === 'admin' && (
-          <label className="field">
+      <form className="ready-form stage-form" onSubmit={submit} onKeyDown={onFormKeyDown} noValidate>
+        <div className="stage-form-head">
+          <h3 className="stage-form-title">+ Stage new ready order</h3>
+          <p className="stage-form-status">
+            <span className="live-dot" aria-hidden />
+            Barcode scanner auto-detection active
+          </p>
+        </div>
+
+        <div className="stage-form-fields">
+          <label className="field field-order">
             <span className="icon-label">
-              <IconDept />
-              Department
+              <IconBarcode />
+              Order ID *
             </span>
-            <select
-              value={department}
-              onChange={(e) => setDepartment(e.target.value as Department)}
-            >
-              {departments.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
+            <input
+              ref={orderIdRef}
+              className="mono"
+              value={orderId}
+              onChange={(e) => onOrderIdChange(e.target.value)}
+              onKeyDown={onOrderIdKeyDown}
+              required
+              autoComplete="off"
+              autoFocus
+              placeholder="Scan or type order ID"
+            />
           </label>
-        )}
-        <button type="submit" className="btn primary" disabled={busy}>
-          <IconCheck />
-          {busy ? 'Saving…' : 'Mark ready'}
-        </button>
+          <label className="field field-pallets">
+            <span className="icon-label">
+              <IconPallet />
+              Pallets (opt)
+            </span>
+            <input
+              type="number"
+              min={1}
+              value={pallets}
+              onChange={(e) => setPallets(e.target.value)}
+            />
+          </label>
+          <label className="field field-bay">
+            <span className="icon-label">
+              <IconBay />
+              Bay (opt)
+            </span>
+            <input
+              value={bay}
+              onChange={(e) => setBay(e.target.value)}
+              placeholder="e.g. Bay 2"
+            />
+          </label>
+          <JiraTicketField value={jiraTicket} onChange={setJiraTicket} id="mark-ready-jira" />
+          <CollectionDateField value={collectionDate} onChange={setCollectionDate} />
+          {role === 'admin' && (
+            <label className="field">
+              <span className="icon-label">
+                <IconDept />
+                Department
+              </span>
+              <select
+                value={department}
+                onChange={(e) => setDepartment(e.target.value as Department)}
+              >
+                {departments.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+
+        <div className="stage-form-foot">
+          <p className="enter-hint">
+            <kbd>Enter</kbd> Press ENTER anywhere in form to submit
+          </p>
+          <button type="submit" className="btn primary mark-ready-btn" disabled={busy}>
+            <IconCheck />
+            {busy ? 'Saving…' : 'Mark ready'}
+          </button>
+        </div>
       </form>
       {error && <p className="form-error">{error}</p>}
 
@@ -446,7 +508,7 @@ export function PalletReadyPanel({
                   {role === 'admin' ? ` · ${order.department}` : ''}
                 </span>
                 <span className="muted">
-                  {collectionDateLabel(order.collectionDate, now) ?? 'No collection date'}
+                  <CollectCell order={order} now={now} />
                   {' · '}
                   {order.readyBy} · {formatTime(order.readyAt)}
                 </span>
@@ -506,7 +568,7 @@ export function PalletReadyPanel({
                     .filter(Boolean)
                     .join(' ')}
                 >
-                  <td className="mono">{order.id}</td>
+                  <td className="mono order-id-cell">{order.id}</td>
                   <td>
                     <JiraTicketText value={order.jiraTicket} />
                   </td>
@@ -515,17 +577,16 @@ export function PalletReadyPanel({
                     {order.door ? <span className="muted"> · Door {order.door}</span> : null}
                   </td>
                   <td>{order.pallets}</td>
-                  <td>{order.bay || <span className="muted">—</span>}</td>
                   <td>
-                    {collectionDateLabel(order.collectionDate, now) || (
-                      <span className="muted">—</span>
-                    )}
+                    <BayCell bay={order.bay} />
+                  </td>
+                  <td>
+                    <CollectCell order={order} now={now} />
                   </td>
                   {role === 'admin' && <td>{order.department}</td>}
-                  <td>
-                    {order.readyBy}
-                    <br />
-                    <span className="muted">
+                  <td className="ready-meta">
+                    <span className="ready-by">{order.readyBy}</span>
+                    <span className="mono ready-dwell">
                       {formatTime(order.readyAt)}
                       {order.status === 'arrived'
                         ? ` · waiting ${formatDwell(order.arrivedAt, now)}`

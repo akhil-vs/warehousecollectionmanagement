@@ -23,7 +23,7 @@ export function JiraTicketField({ value, onChange, id }: Props) {
     <label className="field">
       <span className="icon-label">
         <IconTicket />
-        Jira ticket number (optional)
+        Jira ticket (opt)
       </span>
       <div className="jira-ticket-input">
         <span className="jira-prefix" aria-hidden="true">
@@ -37,7 +37,7 @@ export function JiraTicketField({ value, onChange, id }: Props) {
             const next = e.target.value.replace(/\D/g, '').slice(0, JIRA_TICKET_MAX_DIGITS);
             onChange(next ? `${JIRA_PROJECT_KEY}-${next}` : '');
           }}
-          placeholder="123456"
+          placeholder="420325"
           autoComplete="off"
           spellCheck={false}
           inputMode="numeric"
@@ -47,7 +47,7 @@ export function JiraTicketField({ value, onChange, id }: Props) {
         />
       </div>
       <span id={hintId} className="field-hint">
-        Type the ticket number. COPS- is added automatically.
+        Type number. COPS- is added automatically.
       </span>
     </label>
   );

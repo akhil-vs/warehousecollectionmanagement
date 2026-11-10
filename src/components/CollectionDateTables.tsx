@@ -1,7 +1,6 @@
 import { useMemo, type ReactNode } from 'react';
 import type { Order } from '../types';
 import { groupOrdersByCollectionDate } from '../lib/format';
-import { IconCalendar, IconPallet, IconTruck } from './Icons';
 
 interface Props {
   orders: Order[];
@@ -13,10 +12,12 @@ interface Props {
   renderCard?: (order: Order) => ReactNode;
 }
 
-function GroupIcon({ kind }: { kind: string }) {
-  if (kind === 'undated') return <IconPallet />;
-  if (kind === 'overdue' || kind === 'today') return <IconTruck />;
-  return <IconCalendar />;
+function groupBadge(kind: string): { label: string; className: string } | null {
+  if (kind === 'overdue') return { label: 'Needs attention', className: 'group-badge warn' };
+  if (kind === 'today') return { label: 'Active shift', className: 'group-badge ok' };
+  if (kind === 'upcoming') return { label: 'Scheduled', className: 'group-badge info' };
+  if (kind === 'none') return { label: 'No date', className: 'group-badge muted' };
+  return null;
 }
 
 function GroupHeading({
@@ -30,12 +31,13 @@ function GroupHeading({
     pallets: number;
   };
 }) {
+  const badge = groupBadge(group.kind);
   return (
-    <div className="collection-date-head">
-      <h3>
-        <GroupIcon kind={group.kind} />
-        {group.heading}
-      </h3>
+    <div className={`collection-date-head kind-${group.kind}`}>
+      <div className="collection-date-title">
+        <h3>{group.heading}</h3>
+        {badge ? <span className={badge.className}>{badge.label}</span> : null}
+      </div>
       <p className="muted">
         {group.orders.length} order{group.orders.length === 1 ? '' : 's'} · {group.pallets} plt
       </p>

@@ -25,7 +25,7 @@ export function CollectionDateField({
       <span className="icon-label">
         <IconCalendar />
         {label}
-        {optional ? ' (optional)' : ''}
+        {optional ? ' (opt)' : ''}
       </span>
       <div className="collection-date-controls">
         <button
